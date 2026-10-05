@@ -74,14 +74,21 @@ h1,h2,h3{margin:0}
 .okmark{margin-top:auto;font-weight:700;color:var(--ok);font-size:14px}
 
 /* video list */
-.tbl{background:#fff;border-radius:var(--radius);overflow:hidden}
-.vhead,.vrow{display:grid;grid-template-columns:34px 104px minmax(200px,1fr) 170px 150px 112px 130px;gap:12px;align-items:center;padding:14px 18px}
-.vhead{font-weight:700;background:#E6E4F2;font-size:14.5px}
-.vrow{cursor:pointer;border-top:1px solid #EEEDF5}
-.vrow:hover{background:#F7F6FC}
-.vrow.late{background:#FFF0F0}
-.vmain b{display:block;font-weight:700;word-break:break-word}
-.vmain .sub{display:block}
+.tbl{display:flex;flex-direction:column;gap:10px}
+.vcard{background:#fff;border-radius:14px;padding:16px 20px;display:flex;align-items:center;gap:16px;cursor:pointer;border-left:5px solid var(--acc,#888);transition:transform .1s,box-shadow .1s}
+.vcard:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(20,18,40,.1)}
+.vcard.late{background:#FFF5F5}
+.vthumb{width:80px;height:80px;border-radius:10px;object-fit:cover;flex:none;background:#E6E4F2}
+.vthumb-ph{width:80px;height:80px;border-radius:10px;background:var(--field);flex:none;display:grid;place-items:center;font-size:26px;color:#C0BCD6}
+.vleft{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.vtitle{font-size:18px;font-weight:900;word-break:break-word;line-height:1.35}
+.vmeta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px}
+.vtag{background:var(--field);border-radius:999px;padding:3px 12px;font-weight:700;font-size:13.5px}
+.vright{display:flex;flex-direction:column;align-items:flex-end;gap:10px;flex:none}
+.istats{display:flex;gap:18px}
+.istat{text-align:right}
+.istat b{display:block;font-size:20px;font-weight:900;line-height:1.2}
+.istat small{font-size:12px;color:var(--sub);font-weight:700}
 .warnic{color:#C2410C;font-size:20px;cursor:help}
 .wtxt{display:none;color:#C2410C;font-weight:700;font-size:14px}
 .st{display:inline-flex;align-items:center;gap:7px;font-weight:700}
@@ -89,6 +96,7 @@ h1,h2,h3{margin:0}
 .ins:hover{background:#E8E6F3}
 .ins.done{background:#DDF3E5;color:var(--ok)}
 .ins.late{background:#FFDADA;color:var(--danger)}
+@media(max-width:860px){.vcard{flex-wrap:wrap}.vright{flex-direction:row;align-items:center;width:100%;justify-content:space-between}.istats{gap:12px}.istat b{font-size:16px}}
 
 /* calendar */
 .cal{background:#fff;border-radius:var(--radius);padding:16px}
@@ -197,9 +205,9 @@ h1,h2,h3{margin:0}
   .topbar{display:flex;align-items:center;gap:12px;position:sticky;top:0;background:var(--bg);padding:12px 0;z-index:20;font-weight:900;font-size:18px}
   .topbar button{width:44px;height:44px;border-radius:12px;background:#fff;font-size:20px}
   .ph h1{font-size:25px}
-  .vhead,.ihead{display:none}
-  .vrow,.irow{grid-template-columns:1fr;gap:6px}
-  .vrow>div[data-l]::before,.irow>div[data-l]::before{content:attr(data-l) "：";font-weight:700}
+  .ihead{display:none}
+  .irow{grid-template-columns:1fr;gap:6px}
+  .irow>div[data-l]::before{content:attr(data-l) "：";font-weight:700}
   .c-warn{display:none}
   .wtxt{display:block}
   .day{min-height:68px;padding:3px}
@@ -670,18 +678,36 @@ function videoList() {
   const m = insMapOf(), list = sortVideos(filteredVideos());
   if (!list.length) return empty(S.videos.length ? '条件に合う動画がありません。' : 'まだ動画がありません。「＋ 動画を追加」から登録してください。');
   const rows = list.map(v => {
-    const a = accOf(v.account_id), w = warnList(v), late = isLate(v, m);
-    return `<div class="vrow${late ? ' late' : ''}" data-act="viewVideo" data-id="${v.id}" tabindex="0" role="button">
-      <div class="c-warn">${w.length ? `<span class="warnic" title="${esc(w.join(' / '))}">⚠</span>` : ''}</div>
-      <div data-l="制作日">${esc(fmtDate(v.created_date))}</div>
-      <div class="vmain"><b>${esc(v.title) || '（無題）'}</b>${v.subtitle ? `<span class="sub">${esc(v.subtitle)}</span>` : ''}${v.category ? `<span class="sub">${esc(v.category)}</span>` : ''}${w.length ? `<span class="wtxt">⚠ ${esc(w.join('・'))}</span>` : ''}</div>
-      <div data-l="アカウント">${a ? `<span class="st"><i class="dot" style="background:${esc(a.color)}"></i>${esc(a.name)}</span>` : '未定'}</div>
-      <div data-l="投稿予定">${v.scheduled_date ? esc(fmtDate(v.scheduled_date)) + (v.scheduled_time ? ' ' + esc(hhmm(v.scheduled_time)) : '') : '未定'}</div>
-      <div>${stHtml(v.status)}</div>
-      <div>${insBtn(v, m)}</div>
+    const a = accOf(v.account_id), w = warnList(v), late = isLate(v, m), ins = m.get(v.id);
+    const thumb = v.thumbnail
+      ? `<img class="vthumb" src="${esc(v.thumbnail)}" alt="サムネ">`
+      : `<div class="vthumb-ph">🎬</div>`;
+    const stats = ins
+      ? `<div class="istats">
+          <div class="istat"><b>${ins.plays !== null && ins.plays !== undefined ? Number(ins.plays).toLocaleString() : '—'}</b><small>再生数</small></div>
+          <div class="istat"><b>${ins.likes !== null && ins.likes !== undefined ? Number(ins.likes).toLocaleString() : '—'}</b><small>いいね</small></div>
+          <div class="istat"><b>${ins.follower_diff !== null && ins.follower_diff !== undefined ? (ins.follower_diff > 0 ? '+' : '') + ins.follower_diff : '—'}</b><small>フォロワー増減</small></div>
+        </div>`
+      : `<div class="istats"><div class="istat" style="color:var(--sub)"><b style="font-size:14px">未集計</b></div></div>`;
+    return `<div class="vcard${late ? ' late' : ''}" style="--acc:${esc(a ? a.color : '#888')}" data-act="viewVideo" data-id="${v.id}" tabindex="0" role="button">
+      ${thumb}
+      <div class="vleft">
+        <div class="vtitle">${esc(v.title) || '（タイトル未入力）'}${w.length ? ` <span class="warnic" title="${esc(w.join(' / '))}">⚠</span>` : ''}</div>
+        <div class="vmeta">
+          ${v.category ? `<span class="vtag">${esc(v.category)}</span>` : ''}
+          ${a ? `<span class="st"><i class="dot" style="background:${esc(a.color)}"></i>${esc(a.name)}</span>` : '<span style="color:var(--sub)">アカウント未定</span>'}
+          ${v.scheduled_date ? `<span style="font-weight:700">${esc(fmtDate(v.scheduled_date))}</span>` : '<span style="color:var(--sub)">投稿日未定</span>'}
+          ${stHtml(v.status)}
+        </div>
+        ${w.length ? `<div class="wtxt">⚠ ${esc(w.join('・'))}</div>` : ''}
+      </div>
+      <div class="vright">
+        ${stats}
+        ${insBtn(v, m)}
+      </div>
     </div>`;
   }).join('');
-  return `<p class="count">${list.length}件</p><div class="tbl"><div class="vhead"><div></div><div>制作日</div><div>サムネタイトル／カテゴリ</div><div>投稿アカウント</div><div>投稿日</div><div>ステータス</div><div>インサイト</div></div>${rows}</div>`;
+  return `<p class="count">${list.length}件</p><div class="tbl">${rows}</div>`;
 }
 function videoCalendar() {
   const {y, m} = ui.vcal, vids = filteredVideos(), by = {};
