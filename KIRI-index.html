@@ -535,7 +535,7 @@ function pageAccounts() {
       <div class="aname">${esc(a.name) || '（名称未設定）'}</div>
       <div class="ahandle">${esc(a.handle)}</div>
       <div class="aprof">${esc(a.profile_text)}</div>
-      ${n ? `<span class="miss">⚠ 未入力項目あり（${n}件）</span>` : '<span class="okmark">✔ すべて入力済み</span>'}
+      ${n ? `<span class="miss">⚠ 未入力項目あり（${n}件）</span>` : ''}
     </button>`;
   }).join('');
   return `<div class="ph"><h1>アカウント管理</h1></div>
@@ -726,7 +726,7 @@ function videoForm(id, preset = {}) {
         <input type="text" name="category_other" id="catother" placeholder="作品名を入力" value="${esc(otherVal)}" style="margin-top:8px;display:${(isOther || v.category === 'その他') ? 'block' : 'none'}">
         <input type="hidden" name="category" value="${x('category')}">
       </div>
-      <div class="f full"><label>サムネタイトル（任意）</label><input name="title" value="${x('title')}"></div>
+      <div class="f full"><label>サムネタイトル（任意）</label><textarea name="title" rows="3" placeholder="複数行入力可">${x('title')}</textarea></div>
       <div class="f full"><label>投稿文 <span style="color:var(--accent)">*</span></label><textarea name="subtitle" placeholder="投稿時に使うキャプション・文章を入力">${x('subtitle')}</textarea></div>
       <div class="f full"><label>シーン・切り抜き箇所 <span style="color:var(--accent)">*</span></label><textarea name="notes" placeholder="例：第3話 12:30〜14:00 の告白シーン">${x('notes')}</textarea></div>
       <div class="f full"><label>格納先URL（Google Drive等）<span style="color:var(--accent)">*</span></label><input type="text" name="storage_url" value="${x('storage_url')}" placeholder="https://"></div>
@@ -782,15 +782,18 @@ SUB.video = async (f, form) => {
     status: f.status || '編集中',
     notes: nn(f.notes)
   };
-  // 必須チェック
+  // 未入力チェック（警告のみ・保存は通す）
   const missing = [];
   if (!rec.category) missing.push('カテゴリ');
   if (!rec.storage_url) missing.push('格納先URL');
   if (!rec.scheduled_date) missing.push('投稿日');
   if (!rec.account_id) missing.push('投稿アカウント');
-  if (missing.length) return toast(`必須項目を入力してください：${missing.join('・')}`, true);
+  if (!rec.post_url) missing.push('投稿URL');
+  if (!rec.subtitle) missing.push('投稿文');
+  if (!rec.notes) missing.push('シーン・切り抜き箇所');
   if (id) await q(db.from('videos').update(rec).eq('id', id)); else await q(db.from('videos').insert(rec));
-  closeModal(); await reload(['videos']); toast('保存しました');
+  closeModal(); await reload(['videos']);
+  if (missing.length) { toast(`保存しました（未入力：${missing.join('・')}）`); } else { toast('保存しました'); }
 };
 ACT.delVideo = async d => {
   const v = S.videos.find(x => x.id === d.id), n = S.insights.filter(i => i.video_id === d.id).length;
