@@ -692,7 +692,7 @@ function videoList() {
     return `<div class="vcard${late ? ' late' : ''}" style="--acc:${esc(a ? a.color : '#888')}" data-act="viewVideo" data-id="${v.id}" tabindex="0" role="button">
       ${thumb}
       <div class="vleft">
-        <div class="vtitle">${esc(v.title) || '（タイトル未入力）'}${w.length ? ` <span class="warnic" title="${esc(w.join(' / '))}">⚠</span>` : ''}</div>
+        <div class="vtitle">${esc((v.title || '').split('\n')[0]) || '（タイトル未入力）'}${w.length ? ` <span class="warnic" title="${esc(w.join(' / '))}">⚠</span>` : ''}</div>
         <div class="vmeta">
           ${v.category ? `<span class="vtag">${esc(v.category)}</span>` : ''}
           ${a ? `<span class="st"><i class="dot" style="background:${esc(a.color)}"></i>${esc(a.name)}</span>` : '<span style="color:var(--sub)">アカウント未定</span>'}
@@ -792,14 +792,14 @@ function videoDetailHtml(id) {
   const a = accOf(v.account_id), m = insMapOf();
   const row = (label, val) => `<div class="f"><div class="lab">${label}</div><div class="dval">${val || '（未入力）'}</div></div>`;
   const linkRow = (label, url) => `<div class="f"><div class="lab">${label}</div><div class="dval">${url ? `<a class="dlink" href="${esc(safeUrl(url))}" target="_blank" rel="noopener noreferrer">${esc(url)} ↗</a>` : '（未入力）'}</div></div>`;
-  return `<div class="mh"><h2>${esc(v.title || '（タイトル未入力）')}</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
+  return `<div class="mh"><h2>${esc((v.title || '').split('\n')[0] || '（タイトル未入力）')}</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
     ${v.thumbnail ? `<div class="thumb-wrap"><img src="${esc(v.thumbnail)}" alt="サムネ"></div>` : ''}
     <div style="margin-bottom:14px">${stHtml(v.status)}${a ? `　<span class="st"><i class="dot" style="background:${esc(a.color)}"></i>${esc(a.name)}</span>` : '　アカウント未定'}</div>
     <div class="fgrid">
       ${row('カテゴリ', esc(v.category))}
       ${row('制作日', v.created_date ? esc(fmtDate(v.created_date)) : null)}
       ${row('投稿日', v.scheduled_date ? esc(fmtDate(v.scheduled_date)) + (v.scheduled_time ? '　' + esc(hhmm(v.scheduled_time)) : '') : null)}
-      <div class="f full"><div class="lab">サムネタイトル</div><div class="dval">${v.title ? esc(v.title).replace(/\n/g,'<br>') : '（未入力）'}</div></div>
+      <div class="f full"><div class="lab">サムネタイトル</div><div class="dval">${v.title ? esc(v.title.split('\n')[0]) : '（未入力）'}</div></div>
       <div class="f full"><div class="lab">投稿文</div><div class="dval">${v.subtitle ? esc(v.subtitle).replace(/\n/g,'<br>') : '（未入力）'}</div></div>
       <div class="f full"><div class="lab">シーン・切り抜き箇所</div><div class="dval">${v.notes ? esc(v.notes).replace(/\n/g,'<br>') : '（未入力）'}</div></div>
       ${linkRow('格納先URL', v.storage_url)}
