@@ -215,9 +215,10 @@ h1,h2,h3{margin:0}
 ============================================================ */
 const LS_URL = 'kirinuki_sb_url';
 const LS_KEY = 'kirinuki_sb_key';
-const STATUSES = ['制作中', '完成', '予約済み', '投稿完了', 'ボツ'];
-const STATUS_COLOR = {'制作中':'#D9822B','完成':'#2B7FD9','予約済み':'#7B4BD6','投稿完了':'#1F8A4C','ボツ':'#6B677C'};
-const DEFAULT_CATS = ['恋愛', '学園', 'サスペンス', 'コメディ'];
+const STATUSES = ['編集中', '確認待ち', '投稿予約', '投稿済'];
+const STATUS_COLOR = {'編集中':'#D9822B','確認待ち':'#2B7FD9','投稿予約':'#7B4BD6','投稿済':'#1F8A4C'};
+const FIXED_CATS = ['渋スト', 'ASMR', '希空ch', 'その他'];
+const DEFAULT_CATS = FIXED_CATS;
 const INTERN_COLORS = ['#E5386D','#2B7FD9','#1F8A4C','#D9822B','#7B4BD6','#0C8599','#C2255C','#5C7CFA'];
 const WD = ['日','月','火','水','木','金','土'];
 const PAGES = [
@@ -374,6 +375,13 @@ async function load(tbl) {
   S[tbl] = data || [];
 }
 const loadAll = () => Promise.all(Object.keys(S).map(load));
+async function autoPromoteScheduled() {
+  const today = todayStr();
+  const targets = S.videos.filter(v => v.status === '投稿予約' && v.scheduled_date && v.scheduled_date <= today);
+  if (!targets.length) return;
+  await Promise.all(targets.map(v => q(db.from('videos').update({status:'投稿済'}).eq('id', v.id))));
+  await load('videos');
+}
 async function q(p) { const {data, error} = await p; if (error) throw error; return data; }
 async function reload(tables) {
   await Promise.all(tables.map(load));
@@ -603,7 +611,7 @@ SUB.account = async (f, form) => {
 /* ============================================================
    ② 動画・投稿管理
 ============================================================ */
-const allCategories = () => [...new Set([...DEFAULT_CATS, ...S.videos.map(v => v.category).filter(Boolean)])];
+const allCategories = () => FIXED_CATS;
 function filteredVideos() {
   const f = ui.vf;
   return S.videos.filter(v =>
@@ -613,8 +621,16 @@ function filteredVideos() {
 }
 const sortVideos = a => [...a].sort((x, y) => (y.created_date || '').localeCompare(x.created_date || '') || (y.created_at || '').localeCompare(x.created_at || ''));
 const insMapOf = () => new Map(S.insights.map(i => [i.video_id, i]));
-const isLate = (v, m) => v.status === '投稿完了' && v.scheduled_date && !m.has(v.id) && daysDiff(v.scheduled_date, todayStr()) >= 7;
-const warnList = v => { const w = []; if (!v.storage_url) w.push('動画格納先URLが未入力'); if (!v.post_url) w.push('投稿先URLが未入力'); return w; };
+const isLate = (v, m) => v.status === '投稿済' && v.scheduled_date && !m.has(v.id) && daysDiff(v.scheduled_date, todayStr()) >= 7;
+const warnList = v => {
+  const w = [];
+  if (!v.category) w.push('カテゴリが未入力');
+  if (!v.storage_url) w.push('格納先URLが未入力');
+  if (!v.scheduled_date) w.push('投稿日が未入力');
+  if (!v.account_id) w.push('投稿アカウントが未選択');
+  if (!v.post_url) w.push('投稿URLが未入力');
+  return w;
+};
 const stHtml = s => `<span class="st"><i class="dot" style="background:${STATUS_COLOR[s] || '#888'}"></i>${esc(s)}</span>`;
 function insBtn(v, m) {
   if (m.has(v.id)) return `<button class="ins done" data-act="insight" data-vid="${v.id}">✅ 集計済み</button>`;
@@ -652,7 +668,7 @@ function videoList() {
       <div>${insBtn(v, m)}</div>
     </div>`;
   }).join('');
-  return `<p class="count">${list.length}件</p><div class="tbl"><div class="vhead"><div></div><div>制作日</div><div>タイトル</div><div>投稿アカウント</div><div>投稿予定</div><div>ステータス</div><div>インサイト</div></div>${rows}</div>`;
+  return `<p class="count">${list.length}件</p><div class="tbl"><div class="vhead"><div></div><div>制作日</div><div>サムネタイトル／カテゴリ</div><div>投稿アカウント</div><div>投稿日</div><div>ステータス</div><div>インサイト</div></div>${rows}</div>`;
 }
 function videoCalendar() {
   const {y, m} = ui.vcal, vids = filteredVideos(), by = {};
@@ -688,39 +704,88 @@ function dayVideosHtml(date) {
 ACT.dayVideos = d => openModal(() => dayVideosHtml(d.date), {live: true});
 
 function videoForm(id, preset = {}) {
-  const v = id ? S.videos.find(x => x.id === id) : {status: '制作中', created_date: todayStr(), scheduled_date: preset.date || ''};
+  const v = id ? S.videos.find(x => x.id === id) : {status: '編集中', created_date: '', scheduled_date: preset.date || '', category: ''};
   if (!v) return '';
   const x = k => esc(v[k] ?? '');
+  const isOther = v.category && !['渋スト','ASMR','希空ch'].includes(v.category);
+  const otherVal = isOther ? v.category : '';
   return `<form data-submit="video" data-id="${id || ''}">
     <div class="mh"><h2>${id ? '動画を編集' : '動画を追加'}</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
     <div class="fgrid">
       <div class="fsec">制作情報</div>
-      <div class="f"><label>制作日</label><input type="date" name="created_date" value="${x('created_date')}"></div>
-      <div class="f"><label>カテゴリ</label><input name="category" value="${x('category')}" list="catlist" placeholder="選択または新しく入力"><datalist id="catlist">${allCategories().map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
-      <div class="f full"><label>タイトル</label><input name="title" value="${x('title')}" required></div>
-      <div class="f full"><label>サブタイトル（任意）</label><input name="subtitle" value="${x('subtitle')}"></div>
-      <div class="f full"><label>動画格納先URL（Google Drive等）</label><input type="text" name="storage_url" value="${x('storage_url')}" placeholder="https://"></div>
+      <div class="f"><label>制作日（任意）</label><input type="date" name="created_date" value="${x('created_date')}"></div>
+      <div class="f"><label>カテゴリ <span style="color:var(--accent)">*</span></label>
+        <select name="category_sel" id="catsel" data-act="catSelChange">
+          <option value="">選択してください</option>
+          ${['渋スト','ASMR','希空ch'].map(c => `<option value="${c}" ${(v.category === c) ? 'selected' : ''}>${c}</option>`).join('')}
+          <option value="その他" ${isOther || v.category === 'その他' ? 'selected' : ''}>その他（自由入力）</option>
+        </select>
+        <input type="text" name="category_other" id="catother" placeholder="作品名を入力" value="${esc(otherVal)}" style="margin-top:8px;display:${(isOther || v.category === 'その他') ? 'block' : 'none'}">
+        <input type="hidden" name="category" value="${x('category')}">
+      </div>
+      <div class="f full"><label>サムネタイトル（任意）</label><input name="title" value="${x('title')}"></div>
+      <div class="f full"><label>投稿文 <span style="color:var(--accent)">*</span></label><textarea name="subtitle" placeholder="投稿時に使うキャプション・文章を入力">${x('subtitle')}</textarea></div>
+      <div class="f full"><label>シーン・切り抜き箇所 <span style="color:var(--accent)">*</span></label><textarea name="notes" placeholder="例：第3話 12:30〜14:00 の告白シーン">${x('notes')}</textarea></div>
+      <div class="f full"><label>格納先URL（Google Drive等）<span style="color:var(--accent)">*</span></label><input type="text" name="storage_url" value="${x('storage_url')}" placeholder="https://"></div>
       <div class="fsec">投稿情報</div>
-      <div class="f full"><label>投稿アカウント</label><select name="account_id"><option value="">未定</option>${S.accounts.map(a => `<option value="${a.id}" ${v.account_id === a.id ? 'selected' : ''}>${esc(a.platform)}｜${esc(a.name)}（${esc(a.handle)}）</option>`).join('')}</select></div>
-      <div class="f"><label>投稿予定日</label><input type="date" name="scheduled_date" value="${x('scheduled_date')}"></div>
+      <div class="f full"><label>投稿アカウント <span style="color:var(--accent)">*</span></label><select name="account_id"><option value="">選択してください</option>${S.accounts.map(a => `<option value="${a.id}" ${v.account_id === a.id ? 'selected' : ''}>${esc(a.platform)}｜${esc(a.name)}（${esc(a.handle)}）</option>`).join('')}</select></div>
+      <div class="f"><label>投稿日 <span style="color:var(--accent)">*</span></label><input type="date" name="scheduled_date" value="${x('scheduled_date')}"></div>
       <div class="f"><label>投稿予定時間（任意）</label><input type="time" name="scheduled_time" value="${x('scheduled_time')}"></div>
-      <div class="f full"><label>投稿先URL（実際に投稿したページ・任意）</label><input type="text" name="post_url" value="${x('post_url')}" placeholder="https://"></div>
+      <div class="f full"><label>投稿URL <span style="color:var(--accent)">*</span></label><input type="text" name="post_url" value="${x('post_url')}" placeholder="https://"></div>
       <div class="fsec">ステータス</div>
-      <div class="f full"><div class="segs">${STATUSES.map(s => `<label class="seg"><input type="radio" name="status" value="${s}" ${v.status === s ? 'checked' : ''}><span><i class="dot" style="background:${STATUS_COLOR[s]}"></i>${s}</span></label>`).join('')}</div></div>
-      <div class="f full"><label>メモ</label><textarea name="notes">${x('notes')}</textarea></div>
+      <div class="f full"><div class="segs">${STATUSES.map(s => `<label class="seg"><input type="radio" name="status" value="${s}" ${(v.status || '編集中') === s ? 'checked' : ''}><span><i class="dot" style="background:${STATUS_COLOR[s]}"></i>${s}</span></label>`).join('')}</div></div>
     </div>
-    <div class="mf">${id ? '<button type="button" class="btn danger" data-act="delVideo" data-id="' + id + '">削除</button>' : '<span></span>'}
+    <div class="mf">${id ? `<button type="button" class="btn danger" data-act="delVideo" data-id="${id}">削除</button>` : '<span></span>'}
       <div class="grp"><button type="button" class="btn ghost" data-act="close">キャンセル</button><button type="submit" class="btn pri">保存</button></div></div>
   </form>`;
 }
+ACT.catSelChange = (d, el) => {
+  const form = el.closest('form');
+  const other = form.querySelector('#catother');
+  const hidden = form.elements.category;
+  if (el.value === 'その他') {
+    other.style.display = 'block'; other.focus();
+    hidden.value = other.value || '';
+  } else {
+    other.style.display = 'none';
+    hidden.value = el.value;
+  }
+};
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.name === 'category_other') {
+    const hidden = t.closest('form').elements.category;
+    if (hidden) hidden.value = t.value;
+  }
+});
 ACT.newVideo = d => openModal(() => videoForm(null, {date: d.date}));
 ACT.editVideo = d => openModal(() => videoForm(d.id));
 SUB.video = async (f, form) => {
   const id = form.dataset.id;
-  const rec = {created_date: nn(f.created_date), category: nn(f.category), title: nn(f.title), subtitle: nn(f.subtitle),
-    storage_url: normUrl(f.storage_url), account_id: nn(f.account_id), scheduled_date: nn(f.scheduled_date), scheduled_time: nn(f.scheduled_time),
-    post_url: normUrl(f.post_url), status: f.status || '制作中', notes: nn(f.notes)};
-  if (!rec.title) return toast('タイトルを入力してください', true);
+  // カテゴリ：「その他」選択時は自由入力欄の値を使う
+  const catSel = (f.category_sel || '').trim();
+  const catOther = (f.category_other || '').trim();
+  const category = nn(catSel === 'その他' ? catOther : catSel) || nn(f.category);
+  const rec = {
+    created_date: nn(f.created_date),
+    category,
+    title: nn(f.title),
+    subtitle: nn(f.subtitle),
+    storage_url: normUrl(f.storage_url),
+    account_id: nn(f.account_id),
+    scheduled_date: nn(f.scheduled_date),
+    scheduled_time: nn(f.scheduled_time),
+    post_url: normUrl(f.post_url),
+    status: f.status || '編集中',
+    notes: nn(f.notes)
+  };
+  // 必須チェック
+  const missing = [];
+  if (!rec.category) missing.push('カテゴリ');
+  if (!rec.storage_url) missing.push('格納先URL');
+  if (!rec.scheduled_date) missing.push('投稿日');
+  if (!rec.account_id) missing.push('投稿アカウント');
+  if (missing.length) return toast(`必須項目を入力してください：${missing.join('・')}`, true);
   if (id) await q(db.from('videos').update(rec).eq('id', id)); else await q(db.from('videos').insert(rec));
   closeModal(); await reload(['videos']); toast('保存しました');
 };
@@ -850,7 +915,7 @@ ACT.delIntern = async d => {
 ============================================================ */
 function pageInsights() {
   const m = insMapOf();
-  const eligible = S.videos.filter(v => v.status === '投稿完了' || m.has(v.id));
+  const eligible = S.videos.filter(v => v.status === '投稿済' || m.has(v.id));
   const done = eligible.filter(v => m.has(v.id)).length, late = eligible.filter(v => isLate(v, m)).length;
   let rows = eligible;
   if (ui.insAccount) rows = rows.filter(v => v.account_id === ui.insAccount);
@@ -1048,6 +1113,7 @@ async function boot() {
   try {
     await loadAll();
     if (!S.accounts.length) { await q(db.from('accounts').insert(SEED_ACCOUNTS)); await load('accounts'); }
+    await autoPromoteScheduled();
   } catch (e) {
     console.error(e);
     return showSetup('データを読み込めませんでした：' + (e.message || e) + '\nテーブル作成のSQLを実行済みか、URLとキーが正しいかご確認ください。');
