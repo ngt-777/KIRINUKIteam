@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>切り抜きアカウント管理</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --ink:#14121F; --side:#191733; --side-hi:#2A2750; --bg:#F0EFF6; --card:#fff; --field:#EFEEF6;
+  --accent:#E5386D; --ok:#1F8A4C; --danger:#D12F2F; --sub:#3A3750; --radius:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font-family:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;font-size:16px;color:var(--ink);background:var(--bg);line-height:1.6}
+button{font:inherit;cursor:pointer;border:0;color:inherit;background:none;padding:0}
+a{color:inherit}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--field);border:0;border-radius:10px;padding:10px 12px;width:100%;min-width:0}
+input:focus,select:focus,textarea:focus,button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+textarea{min-height:84px;resize:vertical}
+input[type=color]{height:44px;padding:4px;cursor:pointer}
+h1,h2,h3{margin:0}
+
+/* layout */
+#app{display:flex;min-height:100vh}
+.side{position:fixed;inset:0 auto 0 0;width:236px;background:var(--side);color:#fff;display:flex;flex-direction:column;padding:22px 14px;z-index:30;transition:transform .2s}
+.brand{font-weight:900;font-size:21px;padding:6px 12px 24px;line-height:1.35}
+.brand small{display:block;font-weight:500;font-size:13px;color:#DAD7F2;margin-top:2px}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:12px 14px;border-radius:12px;color:#EEECFC;margin-bottom:4px}
+.nav button:hover{background:var(--side-hi)}
+.nav button.on{background:var(--accent);color:#fff;font-weight:700}
+.side-foot{margin-top:auto}
+.side-foot button{width:100%;text-align:left;padding:10px 14px;border-radius:12px;color:#DAD7F2;font-size:14px}
+.side-foot button:hover{background:var(--side-hi)}
+.main{margin-left:236px;flex:1;padding:34px 38px 70px;min-width:0}
+.topbar{display:none}
+.bd{display:none}
+
+.ph{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.ph h1{font-size:30px;font-weight:900}
+.phr{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 20px;border-radius:999px;font-weight:700;background:var(--ink);color:#fff;white-space:nowrap}
+.btn.pri{background:var(--accent)}
+.btn.ghost{background:var(--field);color:var(--ink)}
+.btn.danger{background:#FBE3E3;color:var(--danger)}
+.btn.del{background:var(--danger);color:#fff}
+.btn.sm{padding:6px 14px;font-size:14.5px}
+.tabs{display:inline-flex;background:#fff;border-radius:999px;padding:4px}
+.tabs button{padding:8px 18px;border-radius:999px;font-weight:700}
+.tabs button.on{background:var(--ink);color:#fff}
+.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;align-items:center}
+.filters select{width:auto;min-width:150px;background:#fff}
+.filters label.chk{display:flex;align-items:center;gap:8px;font-weight:700;background:#fff;padding:10px 14px;border-radius:10px}
+.filters label.chk input{width:auto}
+.count{font-weight:700}
+.empty{background:#fff;border-radius:var(--radius);padding:36px 20px;text-align:center;font-weight:500}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex:none}
+.dot.lg{width:18px;height:18px}
+.sub{color:var(--sub);font-size:14.5px}
+
+/* account cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:18px}
+.acard{background:#fff;border-radius:var(--radius);padding:24px 22px 20px;text-align:left;position:relative;overflow:hidden;display:flex;flex-direction:column;gap:6px;min-height:190px;transition:transform .12s}
+.acard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:8px;background:var(--c)}
+.acard:hover{transform:translateY(-2px)}
+.aplat{font-weight:700;color:var(--sub)}
+.aname{font-size:23px;font-weight:900;line-height:1.3;word-break:break-all}
+.ahandle{font-weight:500;word-break:break-all}
+.aprof{margin-top:4px;font-size:15px}
+.miss{display:inline-block;align-self:flex-start;margin-top:auto;background:#FFE9C2;color:#7A3F00;font-weight:700;border-radius:999px;padding:3px 12px;font-size:14px}
+.okmark{margin-top:auto;font-weight:700;color:var(--ok);font-size:14px}
+
+/* video list */
+.tbl{background:#fff;border-radius:var(--radius);overflow:hidden}
+.vhead,.vrow{display:grid;grid-template-columns:34px 104px minmax(200px,1fr) 170px 150px 112px 130px;gap:12px;align-items:center;padding:14px 18px}
+.vhead{font-weight:700;background:#E6E4F2;font-size:14.5px}
+.vrow{cursor:pointer;border-top:1px solid #EEEDF5}
+.vrow:hover{background:#F7F6FC}
+.vrow.late{background:#FFF0F0}
+.vmain b{display:block;font-weight:700;word-break:break-word}
+.vmain .sub{display:block}
+.warnic{color:#C2410C;font-size:20px;cursor:help}
+.wtxt{display:none;color:#C2410C;font-weight:700;font-size:14px}
+.st{display:inline-flex;align-items:center;gap:7px;font-weight:700}
+.ins{padding:6px 12px;border-radius:999px;font-weight:700;background:#F3F2F8;color:#B4B1C4;white-space:nowrap}
+.ins:hover{background:#E8E6F3}
+.ins.done{background:#DDF3E5;color:var(--ok)}
+.ins.late{background:#FFDADA;color:var(--danger)}
+
+/* calendar */
+.cal{background:#fff;border-radius:var(--radius);padding:16px}
+.cal-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.cal-title{font-size:24px;font-weight:900;min-width:150px;text-align:center}
+.dow,.days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.dow div{text-align:center;font-weight:700;padding:6px 0}
+.dow div:first-child{color:#C0262D}.dow div:last-child{color:#1D5FC1}
+.day{background:#F6F5FB;border-radius:10px;min-height:118px;padding:6px;cursor:pointer;display:flex;flex-direction:column;gap:3px;overflow:hidden}
+.day.blank{background:transparent;cursor:default}
+.day:not(.blank):hover{background:#EBE9F8}
+.dnum{font-weight:700;font-size:14.5px;width:26px;height:26px;display:grid;place-items:center;flex:none}
+.dnum.sun{color:#C0262D}.dnum.sat{color:#1D5FC1}
+.day.today .dnum{background:var(--accent);color:#fff;border-radius:999px}
+.chip{color:#fff;border-radius:6px;padding:2px 7px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.chip.dead{opacity:.5;text-decoration:line-through}
+.more{font-size:13px;font-weight:700}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-size:14.5px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.fchips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.fchip{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:999px;background:#fff;font-weight:700}
+.fchip.on{background:var(--ink);color:#fff}
+
+/* list rows (links, popups) */
+.lrow{display:flex;justify-content:space-between;align-items:center;gap:14px;background:#fff;border-radius:12px;padding:14px 16px;margin-bottom:8px}
+.modal .lrow{background:var(--field)}
+.lmain{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.lmain.inline{flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap}
+.lmain b{font-weight:700;word-break:break-word}
+.lurl{word-break:break-all;font-size:14.5px;font-weight:500}
+.lbtn{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.lbtn a{text-decoration:none}
+.sec{margin:28px 0 12px;font-size:21px;font-weight:900;display:flex;align-items:baseline;gap:10px}
+
+/* insights table */
+.ihead,.irow{display:grid;grid-template-columns:minmax(200px,1fr) 150px 150px 78px 78px 78px 78px 96px 100px;gap:10px;align-items:center;padding:14px 18px}
+.ihead{font-weight:700;background:#E6E4F2;font-size:14.5px}
+.irow{border-top:1px solid #EEEDF5;cursor:pointer}
+.irow:hover{background:#F7F6FC}
+.irow.late{background:#FFF0F0}
+.latetxt{color:var(--danger);font-weight:700}
+.donetxt{color:var(--ok);font-weight:700}
+.summary{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px;font-weight:700}
+
+/* modal */
+.ov{position:fixed;inset:0;background:rgba(20,18,40,.58);display:flex;align-items:flex-start;justify-content:center;padding:4vh 14px;overflow:auto;z-index:100}
+.ov.conf{z-index:200;align-items:center}
+.modal{background:#fff;border-radius:18px;width:100%;max-width:660px;padding:26px;margin:auto 0}
+.modal.wide{max-width:820px}
+.modal.small{max-width:440px}
+.mh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px}
+.mh h2{font-size:22px;font-weight:900}
+.x{width:38px;height:38px;border-radius:50%;background:var(--field);font-size:18px;flex:none}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.f{display:flex;flex-direction:column;gap:6px;min-width:0}
+.f.full{grid-column:1/-1}
+.f>label,.lab{font-weight:700;font-size:15px}
+.f .hint{font-size:14px;color:var(--sub)}
+.fsec{grid-column:1/-1;font-weight:900;font-size:17px;margin-top:10px}
+.mf{display:flex;gap:10px;justify-content:space-between;align-items:center;margin-top:24px;flex-wrap:wrap}
+.mf.end{justify-content:flex-end}
+.mf .grp{display:flex;gap:10px}
+.cmsg{margin:4px 0 8px;font-size:17px;font-weight:500}
+.pw{display:flex;gap:8px}
+.pw button{flex:none;padding:0 14px;border-radius:10px;background:var(--field);font-weight:700}
+.inline-actions{display:flex;gap:8px}
+.inline-actions input{flex:1}
+.segs{display:flex;flex-wrap:wrap;gap:8px}
+.seg input{display:none}
+.seg span{display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:999px;background:var(--field);font-weight:700;cursor:pointer}
+.seg input:checked+span{background:var(--ink);color:#fff}
+.seg input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
+.swatches button{width:30px;height:30px;border-radius:50%}
+.vinfo{background:var(--field);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-weight:500}
+.vinfo b{font-weight:900;font-size:18px}
+
+#toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);background:var(--ink);color:#fff;padding:12px 22px;border-radius:999px;font-weight:700;opacity:0;pointer-events:none;transition:.2s;z-index:300;max-width:90vw}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast.err{background:var(--danger)}
+
+/* setup */
+.setup{min-height:100vh;width:100%;background:var(--side);display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px}
+.setup-in{background:#fff;border-radius:20px;max-width:760px;width:100%;padding:34px}
+.setup-in h1{font-size:28px;font-weight:900;margin-bottom:6px}
+.setup-in ol{padding-left:22px;font-weight:500}
+.setup-in ol li{margin-bottom:8px}
+.setup-in pre{background:#14121F;color:#EDEBFA;border-radius:12px;padding:16px;font-size:12.5px;line-height:1.55;overflow:auto;max-height:260px;margin:0}
+.errbox{background:#FFE3E3;color:#8E1B1B;font-weight:700;border-radius:12px;padding:12px 14px;margin:14px 0;white-space:pre-wrap;word-break:break-word}
+
+@media (max-width:860px){
+  .side{transform:translateX(-100%)}
+  .side.open{transform:none}
+  .bd.show{display:block;position:fixed;inset:0;background:rgba(20,18,40,.5);z-index:25}
+  .main{margin-left:0;padding:0 14px 60px}
+  .topbar{display:flex;align-items:center;gap:12px;position:sticky;top:0;background:var(--bg);padding:12px 0;z-index:20;font-weight:900;font-size:18px}
+  .topbar button{width:44px;height:44px;border-radius:12px;background:#fff;font-size:20px}
+  .ph h1{font-size:25px}
+  .vhead,.ihead{display:none}
+  .vrow,.irow{grid-template-columns:1fr;gap:6px}
+  .vrow>div[data-l]::before,.irow>div[data-l]::before{content:attr(data-l) "：";font-weight:700}
+  .c-warn{display:none}
+  .wtxt{display:block}
+  .day{min-height:68px;padding:3px}
+  .chip{font-size:10.5px;padding:1px 4px}
+  .more{font-size:10.5px}
+  .dow,.days{gap:3px}
+  .cal{padding:10px}
+  .cal-title{font-size:19px;min-width:110px}
+  .fgrid{grid-template-columns:1fr}
+  .modal{padding:20px}
+  .setup-in{padding:22px}
+  .filters select{flex:1;min-width:130px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ============================================================
+   定数
+============================================================ */
+const LS_URL = 'kirinuki_sb_url';
+const LS_KEY = 'kirinuki_sb_key';
+const STATUSES = ['制作中', '完成', '予約済み', '投稿完了', 'ボツ'];
+const STATUS_COLOR = {'制作中':'#D9822B','完成':'#2B7FD9','予約済み':'#7B4BD6','投稿完了':'#1F8A4C','ボツ':'#6B677C'};
+const DEFAULT_CATS = ['恋愛', '学園', 'サスペンス', 'コメディ'];
+const INTERN_COLORS = ['#E5386D','#2B7FD9','#1F8A4C','#D9822B','#7B4BD6','#0C8599','#C2255C','#5C7CFA'];
+const WD = ['日','月','火','水','木','金','土'];
+const PAGES = [
+  {id:'accounts', icon:'👤', label:'アカウント管理'},
+  {id:'videos',   icon:'🎬', label:'動画・投稿管理'},
+  {id:'work',     icon:'🗓️', label:'稼働カレンダー'},
+  {id:'insights', icon:'📊', label:'インサイト集計'},
+  {id:'links',    icon:'🔗', label:'素材・リンク'}
+];
+const SEED_ACCOUNTS = [
+  {platform:'Instagram', name:'どらま切り抜き班', handle:'@dr_kirinuki_han', profile_text:'学園モノとか恋愛ドラマが好き', color:'#D6336C'},
+  {platform:'Instagram', name:'せいしゅん',       handle:'@story_z_dr',      profile_text:'ドラマの切り抜き。自分用',     color:'#E8590C'},
+  {platform:'Instagram', name:'暇つぶし',         handle:'@tadanomemo_ds',   profile_text:null,                           color:'#9C36B5'},
+  {platform:'TikTok',    name:'🍓',               handle:'@kirinalc7c1',     profile_text:'面白かったシーンとかまとめ📺', color:'#0C8599'},
+  {platform:'TikTok',    name:'dramachannel',     handle:'@dramachannel693', profile_text:'保存用。',                     color:'#1971C2'},
+  {platform:'TikTok',    name:'どらまる',         handle:'@kirinidmohf',     profile_text:null,                           color:'#2F9E44'}
+].map((a, i) => ({...a, sort_order: i + 1}));
+
+const SQL_TEXT = `CREATE TABLE accounts (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT, platform TEXT, handle TEXT, color TEXT,
+  profile_text TEXT, tendency TEXT,
+  email TEXT, password TEXT,
+  registered_date TEXT, account_url TEXT,
+  ms_account TEXT, ms_birthdate TEXT,
+  sort_order INT
+);
+
+CREATE TABLE videos (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_date TEXT,
+  category TEXT,
+  title TEXT,
+  subtitle TEXT,
+  storage_url TEXT,
+  account_id uuid REFERENCES accounts(id),
+  scheduled_date TEXT,
+  scheduled_time TEXT,
+  post_url TEXT,
+  status TEXT DEFAULT '制作中',
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE insights (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  video_id uuid REFERENCES videos(id),
+  plays INT,
+  likes INT,
+  comments INT,
+  saves INT,
+  follower_diff INT,
+  memo TEXT,
+  collected_date TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE interns (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT,
+  color TEXT,
+  sort_order INT
+);
+
+CREATE TABLE schedules (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  intern_id uuid REFERENCES interns(id),
+  work_date TEXT,
+  start_time TEXT,
+  end_time TEXT,
+  memo TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE links (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT, url TEXT, category TEXT,
+  description TEXT, sort_order INT
+);
+
+CREATE TABLE link_cats (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT, sort_order INT
+);
+
+-- このアプリはログイン無しで anon キーから読み書きするため RLS を無効にします
+ALTER TABLE accounts  DISABLE ROW LEVEL SECURITY;
+ALTER TABLE videos    DISABLE ROW LEVEL SECURITY;
+ALTER TABLE insights  DISABLE ROW LEVEL SECURITY;
+ALTER TABLE interns   DISABLE ROW LEVEL SECURITY;
+ALTER TABLE schedules DISABLE ROW LEVEL SECURITY;
+ALTER TABLE links     DISABLE ROW LEVEL SECURITY;
+ALTER TABLE link_cats DISABLE ROW LEVEL SECURITY;`;
+
+/* ============================================================
+   状態
+============================================================ */
+let db = null;
+const S = {accounts:[], videos:[], insights:[], interns:[], schedules:[], links:[], link_cats:[]};
+const now0 = new Date();
+const ui = {
+  page: 'accounts',
+  vTab: 'list',
+  vf: {category:'', account:'', status:''},
+  vcal: {y: now0.getFullYear(), m: now0.getMonth()},
+  wcal: {y: now0.getFullYear(), m: now0.getMonth()},
+  wf: '',
+  insPending: false,
+  insAccount: ''
+};
+
+/* ============================================================
+   ユーティリティ
+============================================================ */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nn = v => { v = (v ?? '').toString().trim(); return v === '' ? null : v; };
+const numOrNull = v => { v = (v ?? '').toString().trim(); if (v === '') return null; const n = Number(v); return Number.isFinite(n) ? Math.trunc(n) : null; };
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const todayStr = () => ymd(new Date());
+const parseD = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const daysDiff = (a, b) => Math.round((parseD(b) - parseD(a)) / 86400000);
+const addDays = (s, n) => { const d = parseD(s); d.setDate(d.getDate() + n); return ymd(d); };
+const fmtDate = s => s ? s.replace(/-/g, '/') : '';
+const dateLabel = s => { const d = parseD(s); return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}）`; };
+const hhmm = s => s ? String(s).slice(0, 5) : '';
+const safeUrl = u => { if (!u) return ''; const t = String(u).trim(); return /^https?:\/\//i.test(t) ? t : (/^[a-z][a-z0-9+.-]*:/i.test(t) ? '' : 'https://' + t); };
+const normUrl = v => { const t = nn(v); if (!t) return null; return /^[a-z][a-z0-9+.-]*:\/\//i.test(t) ? t : 'https://' + t; };
+const accOf = id => S.accounts.find(a => a.id === id);
+const nextOrder = tbl => Math.max(0, ...S[tbl].map(r => r.sort_order || 0)) + 1;
+const empty = msg => `<div class="empty">${esc(msg)}</div>`;
+
+let toastT;
+function toast(msg, err) {
+  let t = $('#toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
+  clearTimeout(toastT); toastT = setTimeout(() => t.className = '', err ? 4200 : 2200);
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); }
+  catch { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+  toast('コピーしました');
+}
+
+/* ============================================================
+   Supabase
+============================================================ */
+const ORDER = {accounts:'sort_order', interns:'sort_order', links:'sort_order', link_cats:'sort_order', videos:'created_at', insights:'created_at', schedules:'work_date'};
+async function load(tbl) {
+  const {data, error} = await db.from(tbl).select('*').order(ORDER[tbl], {ascending: true});
+  if (error) throw error;
+  S[tbl] = data || [];
+}
+const loadAll = () => Promise.all(Object.keys(S).map(load));
+async function q(p) { const {data, error} = await p; if (error) throw error; return data; }
+async function reload(tables) {
+  await Promise.all(tables.map(load));
+  renderPage(); refreshModals();
+}
+
+/* ============================================================
+   モーダル
+============================================================ */
+const modals = [];
+function openModal(render, opts = {}) {
+  const ov = document.createElement('div'); ov.className = 'ov';
+  const m = document.createElement('div'); m.className = 'modal' + (opts.wide ? ' wide' : '');
+  ov.appendChild(m); document.body.appendChild(ov); document.body.style.overflow = 'hidden';
+  const obj = {ov, m, render, live: !!opts.live};
+  m.innerHTML = render();
+  let downOnOv = false;
+  ov.addEventListener('mousedown', e => { downOnOv = e.target === ov; });
+  ov.addEventListener('click', e => { if (e.target === ov && downOnOv) closeModal(obj); });
+  modals.push(obj);
+  return obj;
+}
+function closeModal(obj) {
+  obj = obj || modals[modals.length - 1];
+  if (!obj) return;
+  const i = modals.indexOf(obj); if (i >= 0) modals.splice(i, 1);
+  obj.ov.remove();
+  if (!modals.length) document.body.style.overflow = '';
+}
+function refreshModals() { modals.forEach(o => { if (o.live) o.m.innerHTML = o.render(); }); }
+
+function confirmDialog(msg, o = {}) {
+  const {ok = '削除する', alertOnly = false} = o;
+  return new Promise(res => {
+    const ov = document.createElement('div'); ov.className = 'ov conf';
+    ov.innerHTML = `<div class="modal small" role="alertdialog" aria-modal="true"><p class="cmsg">${esc(msg).replace(/\n/g, '<br>')}</p>
+      <div class="mf end">${alertOnly ? '' : '<button class="btn ghost" data-r="0">キャンセル</button>'}
+      <button class="btn ${alertOnly ? 'pri' : (o.danger === false ? 'pri' : 'del')}" data-r="1">${alertOnly ? 'OK' : esc(ok)}</button></div></div>`;
+    document.body.appendChild(ov);
+    const done = v => { document.removeEventListener('keydown', onKey, true); ov.remove(); res(v); };
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } };
+    document.addEventListener('keydown', onKey, true);
+    ov.addEventListener('click', e => { const b = e.target.closest('[data-r]'); if (b) done(b.dataset.r === '1'); });
+    (ov.querySelector('[data-r="0"]') || ov.querySelector('[data-r="1"]')).focus();
+  });
+}
+
+/* ============================================================
+   イベント（委譲）
+============================================================ */
+const ACT = {}, SUB = {};
+document.addEventListener('click', async e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const fn = ACT[el.dataset.act]; if (!fn) return;
+  try { await fn(el.dataset, el, e); } catch (err) { console.error(err); toast(err.message || 'エラーが発生しました', true); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.matches('[data-act][tabindex]')) { e.preventDefault(); e.target.click(); }
+  else if (e.key === 'Escape' && modals.length && !document.querySelector('.ov.conf')) closeModal();
+});
+document.addEventListener('submit', async e => {
+  const f = e.target.closest('form[data-submit]'); if (!f) return;
+  e.preventDefault();
+  const btn = f.querySelector('button[type=submit]'); if (btn) btn.disabled = true;
+  try { await SUB[f.dataset.submit](Object.fromEntries(new FormData(f)), f); }
+  catch (err) { console.error(err); toast(err.message || 'エラーが発生しました', true); }
+  finally { if (btn) btn.disabled = false; }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.vf !== undefined) { ui.vf[t.dataset.vf] = t.value; renderPage(); }
+  else if (t.dataset.ins !== undefined) {
+    if (t.dataset.ins === 'pending') ui.insPending = t.checked; else ui.insAccount = t.value;
+    renderPage();
+  }
+});
+
+/* ============================================================
+   画面共通
+============================================================ */
+function renderShell() {
+  $('#app').innerHTML = `
+    <aside class="side" id="side">
+      <div class="brand">切り抜き管理<small>ドラマ切り抜きSNS 6アカウント</small></div>
+      <nav class="nav">${PAGES.map(p => `<button data-act="nav" data-page="${p.id}" data-p="${p.id}"><span>${p.icon}</span>${p.label}</button>`).join('')}</nav>
+      <div class="side-foot"><button data-act="resetConn">接続設定を変更</button></div>
+    </aside>
+    <div class="bd" id="bd" data-act="menu"></div>
+    <main class="main">
+      <div class="topbar"><button data-act="menu" aria-label="メニュー">☰</button><span id="topttl"></span></div>
+      <div id="main"></div>
+    </main>`;
+}
+function renderPage() {
+  const main = $('#main'); if (!main) return;
+  const fn = {accounts:pageAccounts, videos:pageVideos, work:pageWork, insights:pageInsights, links:pageLinks}[ui.page];
+  main.innerHTML = fn();
+  document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('on', b.dataset.p === ui.page));
+  const t = $('#topttl'); if (t) t.textContent = PAGES.find(p => p.id === ui.page).label;
+}
+ACT.nav = d => { location.hash = d.page; };
+ACT.menu = () => { $('#side').classList.toggle('open'); $('#bd').classList.toggle('show'); };
+ACT.close = () => closeModal();
+ACT.copy = d => copyText(d.text);
+ACT.resetConn = async () => {
+  if (!await confirmDialog('接続設定（Supabase の URL とキー）をこのブラウザから削除します。\nデータベース内のデータは消えません。\n続行しますか？', {ok: '接続設定を削除'})) return;
+  localStorage.removeItem(LS_URL); localStorage.removeItem(LS_KEY); location.reload();
+};
+window.addEventListener('hashchange', () => {
+  const h = location.hash.slice(1);
+  if (PAGES.some(p => p.id === h)) { ui.page = h; renderPage(); }
+  const s = $('#side'); if (s) { s.classList.remove('open'); $('#bd').classList.remove('show'); }
+  window.scrollTo(0, 0);
+});
+
+/* カレンダー共通 */
+function monthGrid(y, m) {
+  const first = new Date(y, m, 1).getDay(), n = new Date(y, m + 1, 0).getDate(), cells = [];
+  for (let i = 0; i < first; i++) cells.push(null);
+  for (let d = 1; d <= n; d++) cells.push(`${y}-${pad(m + 1)}-${pad(d)}`);
+  while (cells.length % 7) cells.push(null);
+  return cells;
+}
+function calHead(which, y, m, extra = '') {
+  return `<div class="cal-head">
+    <button class="btn ghost sm" data-act="calNav" data-cal="${which}" data-dir="-1">◀ 前月</button>
+    <div class="cal-title">${y}年${m + 1}月</div>
+    <button class="btn ghost sm" data-act="calNav" data-cal="${which}" data-dir="1">翌月 ▶</button>
+    <button class="btn ghost sm" data-act="calNav" data-cal="${which}" data-dir="0">今月</button>${extra}</div>`;
+}
+ACT.calNav = d => {
+  const c = d.cal === 'v' ? ui.vcal : ui.wcal, dir = +d.dir;
+  if (dir === 0) { const n = new Date(); c.y = n.getFullYear(); c.m = n.getMonth(); }
+  else { c.m += dir; if (c.m < 0) { c.m = 11; c.y--; } if (c.m > 11) { c.m = 0; c.y++; } }
+  renderPage();
+};
+const DOW_HTML = `<div class="dow">${WD.map(w => `<div>${w}</div>`).join('')}</div>`;
+const dnumCls = i => i % 7 === 0 ? 'sun' : i % 7 === 6 ? 'sat' : '';
+
+/* ============================================================
+   ① アカウント管理
+============================================================ */
+const ACC_FIELDS = ['name','platform','handle','profile_text','tendency','email','password','registered_date','account_url','ms_account','ms_birthdate'];
+const missCount = a => ACC_FIELDS.filter(k => !a[k] || !String(a[k]).trim()).length;
+
+function pageAccounts() {
+  const cards = S.accounts.map((a, i) => {
+    const n = missCount(a);
+    return `<button class="acard" style="--c:${esc(a.color || '#888')}" data-act="editAccount" data-id="${a.id}">
+      <div class="aplat">No.${a.sort_order || i + 1}　${esc(a.platform)}</div>
+      <div class="aname">${esc(a.name) || '（名称未設定）'}</div>
+      <div class="ahandle">${esc(a.handle)}</div>
+      <div class="aprof">${esc(a.profile_text)}</div>
+      ${n ? `<span class="miss">⚠ 未入力項目あり（${n}件）</span>` : '<span class="okmark">✔ すべて入力済み</span>'}
+    </button>`;
+  }).join('');
+  return `<div class="ph"><h1>アカウント管理</h1></div>
+    ${S.accounts.length ? `<div class="grid">${cards}</div>` : empty('アカウントがありません。')}`;
+}
+function accountForm(id) {
+  const a = S.accounts.find(x => x.id === id); if (!a) return '';
+  const v = k => esc(a[k] ?? '');
+  return `<form data-submit="account" data-id="${a.id}">
+    <div class="mh"><h2>No.${a.sort_order} アカウントを編集</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
+    <div class="fgrid">
+      <div class="f"><label>アカウント名</label><input name="name" value="${v('name')}" required></div>
+      <div class="f"><label>媒体</label><select name="platform">${['Instagram','TikTok','YouTube','X'].map(p => `<option ${a.platform === p ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
+      <div class="f"><label>ID</label><input name="handle" value="${v('handle')}"></div>
+      <div class="f"><label>カード色（動画カレンダーの色）</label><input type="color" name="color" value="${/^#[0-9a-f]{6}$/i.test(a.color || '') ? a.color : '#888888'}"></div>
+      <div class="f full"><label>プロフィール文</label><textarea name="profile_text">${v('profile_text')}</textarea></div>
+      <div class="f full"><label>アカウント傾向</label><textarea name="tendency" placeholder="例：恋愛・学園ものが中心／夜に伸びやすい など">${v('tendency')}</textarea></div>
+      <div class="f"><label>登録メールアドレス</label><input type="text" name="email" value="${v('email')}" autocomplete="off"></div>
+      <div class="f"><label>パスワード</label>
+        <div class="pw"><input type="password" name="password" value="${v('password')}" autocomplete="new-password">
+          <button type="button" data-act="togglePw" aria-label="表示切り替え">👁</button>
+          <button type="button" data-act="copyField" data-name="password">コピー</button></div></div>
+      <div class="f"><label>SNSアカウント登録年月日</label><input type="date" name="registered_date" value="${v('registered_date')}"></div>
+      <div class="f"><label>アカウントURL</label>
+        <div class="inline-actions"><input type="text" name="account_url" value="${v('account_url')}" placeholder="https://"><button type="button" class="btn ghost sm" data-act="autoUrl">IDから入力</button></div></div>
+      <div class="f"><label>Microsoftアカウント名</label><input name="ms_account" value="${v('ms_account')}" autocomplete="off"></div>
+      <div class="f"><label>Microsoft登録生年月日</label><input type="date" name="ms_birthdate" value="${v('ms_birthdate')}"></div>
+    </div>
+    <div class="mf end"><button type="button" class="btn ghost" data-act="close">キャンセル</button><button type="submit" class="btn pri">保存</button></div>
+  </form>`;
+}
+ACT.editAccount = d => openModal(() => accountForm(d.id));
+ACT.togglePw = (d, el) => {
+  const inp = el.closest('form').elements.password;
+  const show = inp.type === 'password'; inp.type = show ? 'text' : 'password'; el.textContent = show ? '🙈' : '👁';
+};
+ACT.copyField = (d, el) => { const v = el.closest('form').elements[d.name].value; if (!v) return toast('コピーする内容がありません', true); copyText(v); };
+ACT.autoUrl = (d, el) => {
+  const f = el.closest('form'), h = f.elements.handle.value.trim().replace(/^@/, ''), p = f.elements.platform.value;
+  if (!h) return toast('先にIDを入力してください', true);
+  const map = {Instagram: `https://www.instagram.com/${h}/`, TikTok: `https://www.tiktok.com/@${h}`, YouTube: `https://www.youtube.com/@${h}`, X: `https://x.com/${h}`};
+  f.elements.account_url.value = map[p] || '';
+};
+SUB.account = async (f, form) => {
+  const rec = {};
+  ['name','platform','handle','profile_text','tendency','email','password','registered_date','account_url','ms_account','ms_birthdate','color'].forEach(k => rec[k] = nn(f[k]));
+  await q(db.from('accounts').update(rec).eq('id', form.dataset.id));
+  closeModal(); await reload(['accounts']); toast('保存しました');
+};
+
+/* ============================================================
+   ② 動画・投稿管理
+============================================================ */
+const allCategories = () => [...new Set([...DEFAULT_CATS, ...S.videos.map(v => v.category).filter(Boolean)])];
+function filteredVideos() {
+  const f = ui.vf;
+  return S.videos.filter(v =>
+    (!f.category || v.category === f.category) &&
+    (!f.account || (f.account === 'none' ? !v.account_id : v.account_id === f.account)) &&
+    (!f.status || v.status === f.status));
+}
+const sortVideos = a => [...a].sort((x, y) => (y.created_date || '').localeCompare(x.created_date || '') || (y.created_at || '').localeCompare(x.created_at || ''));
+const insMapOf = () => new Map(S.insights.map(i => [i.video_id, i]));
+const isLate = (v, m) => v.status === '投稿完了' && v.scheduled_date && !m.has(v.id) && daysDiff(v.scheduled_date, todayStr()) >= 7;
+const warnList = v => { const w = []; if (!v.storage_url) w.push('動画格納先URLが未入力'); if (!v.post_url) w.push('投稿先URLが未入力'); return w; };
+const stHtml = s => `<span class="st"><i class="dot" style="background:${STATUS_COLOR[s] || '#888'}"></i>${esc(s)}</span>`;
+function insBtn(v, m) {
+  if (m.has(v.id)) return `<button class="ins done" data-act="insight" data-vid="${v.id}">✅ 集計済み</button>`;
+  if (isLate(v, m)) return `<button class="ins late" data-act="insight" data-vid="${v.id}" title="投稿から7日以上経過">📊 要集計</button>`;
+  return `<button class="ins" data-act="insight" data-vid="${v.id}" title="インサイトを入力">📊</button>`;
+}
+function vFilters() {
+  const f = ui.vf, any = f.category || f.account || f.status;
+  return `<div class="filters">
+    <select data-vf="category" aria-label="カテゴリ"><option value="">カテゴリ：すべて</option>${allCategories().map(c => `<option ${f.category === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+    <select data-vf="account" aria-label="アカウント"><option value="">アカウント：すべて</option><option value="none" ${f.account === 'none' ? 'selected' : ''}>未定</option>${S.accounts.map(a => `<option value="${a.id}" ${f.account === a.id ? 'selected' : ''}>${esc(a.platform)}｜${esc(a.name)}</option>`).join('')}</select>
+    <select data-vf="status" aria-label="ステータス"><option value="">ステータス：すべて</option>${STATUSES.map(s => `<option ${f.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
+    ${any ? '<button class="btn ghost sm" data-act="clearVf">絞り込み解除</button>' : ''}</div>`;
+}
+ACT.clearVf = () => { ui.vf = {category:'', account:'', status:''}; renderPage(); };
+ACT.vtab = d => { ui.vTab = d.t; renderPage(); };
+
+function pageVideos() {
+  const tabs = `<div class="tabs"><button class="${ui.vTab === 'list' ? 'on' : ''}" data-act="vtab" data-t="list">リスト表示</button><button class="${ui.vTab === 'cal' ? 'on' : ''}" data-act="vtab" data-t="cal">カレンダー表示</button></div>`;
+  return `<div class="ph"><h1>動画・投稿管理</h1><div class="phr">${tabs}<button class="btn pri" data-act="newVideo">＋ 動画を追加</button></div></div>
+    ${vFilters()}${ui.vTab === 'list' ? videoList() : videoCalendar()}`;
+}
+function videoList() {
+  const m = insMapOf(), list = sortVideos(filteredVideos());
+  if (!list.length) return empty(S.videos.length ? '条件に合う動画がありません。' : 'まだ動画がありません。「＋ 動画を追加」から登録してください。');
+  const rows = list.map(v => {
+    const a = accOf(v.account_id), w = warnList(v), late = isLate(v, m);
+    return `<div class="vrow${late ? ' late' : ''}" data-act="editVideo" data-id="${v.id}" tabindex="0" role="button">
+      <div class="c-warn">${w.length ? `<span class="warnic" title="${esc(w.join(' / '))}">⚠</span>` : ''}</div>
+      <div data-l="制作日">${esc(fmtDate(v.created_date))}</div>
+      <div class="vmain"><b>${esc(v.title) || '（無題）'}</b>${v.subtitle ? `<span class="sub">${esc(v.subtitle)}</span>` : ''}${v.category ? `<span class="sub">${esc(v.category)}</span>` : ''}${w.length ? `<span class="wtxt">⚠ ${esc(w.join('・'))}</span>` : ''}</div>
+      <div data-l="アカウント">${a ? `<span class="st"><i class="dot" style="background:${esc(a.color)}"></i>${esc(a.name)}</span>` : '未定'}</div>
+      <div data-l="投稿予定">${v.scheduled_date ? esc(fmtDate(v.scheduled_date)) + (v.scheduled_time ? ' ' + esc(hhmm(v.scheduled_time)) : '') : '未定'}</div>
+      <div>${stHtml(v.status)}</div>
+      <div>${insBtn(v, m)}</div>
+    </div>`;
+  }).join('');
+  return `<p class="count">${list.length}件</p><div class="tbl"><div class="vhead"><div></div><div>制作日</div><div>タイトル</div><div>投稿アカウント</div><div>投稿予定</div><div>ステータス</div><div>インサイト</div></div>${rows}</div>`;
+}
+function videoCalendar() {
+  const {y, m} = ui.vcal, vids = filteredVideos(), by = {};
+  vids.filter(v => v.scheduled_date).forEach(v => (by[v.scheduled_date] = by[v.scheduled_date] || []).push(v));
+  Object.values(by).forEach(a => a.sort((p, r) => (p.scheduled_time || '').localeCompare(r.scheduled_time || '')));
+  const unsched = vids.filter(v => !v.scheduled_date).length, t = todayStr();
+  const cells = monthGrid(y, m).map((ds, i) => {
+    if (!ds) return '<div class="day blank"></div>';
+    const items = by[ds] || [];
+    const chips = items.slice(0, 3).map(v => {
+      const a = accOf(v.account_id);
+      return `<div class="chip${v.status === 'ボツ' ? ' dead' : ''}" style="background:${esc(a ? a.color : '#5B5672')}">${v.status === '投稿完了' ? '✓ ' : ''}${v.scheduled_time ? esc(hhmm(v.scheduled_time)) + ' ' : ''}${esc(v.title || '（無題）')}</div>`;
+    }).join('');
+    return `<div class="day${ds === t ? ' today' : ''}" data-act="dayVideos" data-date="${ds}" tabindex="0" role="button" aria-label="${esc(dateLabel(ds))}"><div class="dnum ${dnumCls(i)}">${+ds.slice(8)}</div>${chips}${items.length > 3 ? `<div class="more">ほか${items.length - 3}件</div>` : ''}</div>`;
+  }).join('');
+  const legend = S.accounts.map(a => `<span><i class="dot" style="background:${esc(a.color)}"></i>${esc(a.name)}</span>`).join('') + '<span><i class="dot" style="background:#5B5672"></i>アカウント未定</span>';
+  return `<div class="cal">${calHead('v', y, m)}${DOW_HTML}<div class="days">${cells}</div>
+    <div class="legend">${legend}</div>
+    ${unsched ? `<p class="sub">投稿予定日が未設定の動画：${unsched}件（リスト表示で確認できます）</p>` : ''}</div>`;
+}
+function dayVideosHtml(date) {
+  const m = insMapOf(), items = filteredVideos().filter(v => v.scheduled_date === date).sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || ''));
+  const body = items.length ? items.map(v => {
+    const a = accOf(v.account_id);
+    return `<div class="lrow"><div class="lmain" data-act="editVideo" data-id="${v.id}" style="cursor:pointer" tabindex="0" role="button">
+      <b>${v.scheduled_time ? esc(hhmm(v.scheduled_time)) + '　' : ''}${esc(v.title || '（無題）')}</b>
+      <span class="sub">${a ? `<i class="dot" style="background:${esc(a.color)}"></i> ${esc(a.name)}` : 'アカウント未定'}　${stHtml(v.status)}</span></div>
+      <div class="lbtn">${insBtn(v, m)}</div></div>`;
+  }).join('') : '<p class="empty">この日の投稿予定はありません。</p>';
+  return `<div class="mh"><h2>${esc(dateLabel(date))}の投稿</h2><button class="x" data-act="close" aria-label="閉じる">✕</button></div>${body}
+    <div class="mf"><button class="btn pri" data-act="newVideo" data-date="${date}">＋ この日に動画を追加</button><button class="btn ghost" data-act="close">閉じる</button></div>`;
+}
+ACT.dayVideos = d => openModal(() => dayVideosHtml(d.date), {live: true});
+
+function videoForm(id, preset = {}) {
+  const v = id ? S.videos.find(x => x.id === id) : {status: '制作中', created_date: todayStr(), scheduled_date: preset.date || ''};
+  if (!v) return '';
+  const x = k => esc(v[k] ?? '');
+  return `<form data-submit="video" data-id="${id || ''}">
+    <div class="mh"><h2>${id ? '動画を編集' : '動画を追加'}</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
+    <div class="fgrid">
+      <div class="fsec">制作情報</div>
+      <div class="f"><label>制作日</label><input type="date" name="created_date" value="${x('created_date')}"></div>
+      <div class="f"><label>カテゴリ</label><input name="category" value="${x('category')}" list="catlist" placeholder="選択または新しく入力"><datalist id="catlist">${allCategories().map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
+      <div class="f full"><label>タイトル</label><input name="title" value="${x('title')}" required></div>
+      <div class="f full"><label>サブタイトル（任意）</label><input name="subtitle" value="${x('subtitle')}"></div>
+      <div class="f full"><label>動画格納先URL（Google Drive等）</label><input type="text" name="storage_url" value="${x('storage_url')}" placeholder="https://"></div>
+      <div class="fsec">投稿情報</div>
+      <div class="f full"><label>投稿アカウント</label><select name="account_id"><option value="">未定</option>${S.accounts.map(a => `<option value="${a.id}" ${v.account_id === a.id ? 'selected' : ''}>${esc(a.platform)}｜${esc(a.name)}（${esc(a.handle)}）</option>`).join('')}</select></div>
+      <div class="f"><label>投稿予定日</label><input type="date" name="scheduled_date" value="${x('scheduled_date')}"></div>
+      <div class="f"><label>投稿予定時間（任意）</label><input type="time" name="scheduled_time" value="${x('scheduled_time')}"></div>
+      <div class="f full"><label>投稿先URL（実際に投稿したページ・任意）</label><input type="text" name="post_url" value="${x('post_url')}" placeholder="https://"></div>
+      <div class="fsec">ステータス</div>
+      <div class="f full"><div class="segs">${STATUSES.map(s => `<label class="seg"><input type="radio" name="status" value="${s}" ${v.status === s ? 'checked' : ''}><span><i class="dot" style="background:${STATUS_COLOR[s]}"></i>${s}</span></label>`).join('')}</div></div>
+      <div class="f full"><label>メモ</label><textarea name="notes">${x('notes')}</textarea></div>
+    </div>
+    <div class="mf">${id ? '<button type="button" class="btn danger" data-act="delVideo" data-id="' + id + '">削除</button>' : '<span></span>'}
+      <div class="grp"><button type="button" class="btn ghost" data-act="close">キャンセル</button><button type="submit" class="btn pri">保存</button></div></div>
+  </form>`;
+}
+ACT.newVideo = d => openModal(() => videoForm(null, {date: d.date}));
+ACT.editVideo = d => openModal(() => videoForm(d.id));
+SUB.video = async (f, form) => {
+  const id = form.dataset.id;
+  const rec = {created_date: nn(f.created_date), category: nn(f.category), title: nn(f.title), subtitle: nn(f.subtitle),
+    storage_url: normUrl(f.storage_url), account_id: nn(f.account_id), scheduled_date: nn(f.scheduled_date), scheduled_time: nn(f.scheduled_time),
+    post_url: normUrl(f.post_url), status: f.status || '制作中', notes: nn(f.notes)};
+  if (!rec.title) return toast('タイトルを入力してください', true);
+  if (id) await q(db.from('videos').update(rec).eq('id', id)); else await q(db.from('videos').insert(rec));
+  closeModal(); await reload(['videos']); toast('保存しました');
+};
+ACT.delVideo = async d => {
+  const v = S.videos.find(x => x.id === d.id), n = S.insights.filter(i => i.video_id === d.id).length;
+  if (!await confirmDialog(`「${v.title || '（無題）'}」を削除しますか？${n ? '\n紐づくインサイトも一緒に削除されます。' : ''}\nこの操作は元に戻せません。`)) return;
+  await q(db.from('insights').delete().eq('video_id', d.id));
+  await q(db.from('videos').delete().eq('id', d.id));
+  closeModal(); await reload(['videos', 'insights']); toast('削除しました');
+};
+
+/* ============================================================
+   ③ 稼働カレンダー
+============================================================ */
+const internOf = id => S.interns.find(i => i.id === id);
+function pageWork() {
+  const {y, m} = ui.wcal, vis = S.schedules.filter(s => !ui.wf || s.intern_id === ui.wf), by = {};
+  vis.forEach(s => (by[s.work_date] = by[s.work_date] || []).push(s));
+  Object.values(by).forEach(a => a.sort((p, r) => (p.start_time || '').localeCompare(r.start_time || '')));
+  const t = todayStr();
+  const cells = monthGrid(y, m).map((ds, i) => {
+    if (!ds) return '<div class="day blank"></div>';
+    const items = by[ds] || [];
+    const chips = items.slice(0, 3).map(s => { const it = internOf(s.intern_id); return `<div class="chip" style="background:${esc(it ? it.color : '#5B5672')}">${esc(it ? it.name : '（削除済み）')} ${esc(hhmm(s.start_time))}〜${esc(hhmm(s.end_time))}</div>`; }).join('');
+    return `<div class="day${ds === t ? ' today' : ''}" data-act="dayWork" data-date="${ds}" tabindex="0" role="button" aria-label="${esc(dateLabel(ds))}"><div class="dnum ${dnumCls(i)}">${+ds.slice(8)}</div>${chips}${items.length > 3 ? `<div class="more">ほか${items.length - 3}件</div>` : ''}</div>`;
+  }).join('');
+  const chipsF = `<div class="fchips"><button class="fchip ${ui.wf === '' ? 'on' : ''}" data-act="wf" data-id="">全員</button>${S.interns.map(it => `<button class="fchip ${ui.wf === it.id ? 'on' : ''}" data-act="wf" data-id="${it.id}"><i class="dot" style="background:${esc(it.color)}"></i>${esc(it.name)}</button>`).join('')}</div>`;
+  return `<div class="ph"><h1>稼働カレンダー</h1><div class="phr"><button class="btn ghost" data-act="internMgr">インターン管理</button><button class="btn pri" data-act="newSched">＋ 稼働を追加</button></div></div>
+    ${S.interns.length ? chipsF : empty('インターンが未登録です。「インターン管理」から名前とカラーを登録してください。')}
+    <div class="cal" style="margin-top:${S.interns.length ? 0 : 16}px">${calHead('w', y, m)}${DOW_HTML}<div class="days">${cells}</div></div>`;
+}
+ACT.wf = d => { ui.wf = d.id; renderPage(); };
+function dayWorkHtml(date) {
+  const items = S.schedules.filter(s => s.work_date === date && (!ui.wf || s.intern_id === ui.wf)).sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
+  const body = items.length ? items.map(s => {
+    const it = internOf(s.intern_id);
+    return `<div class="lrow"><div class="lmain"><b><i class="dot" style="background:${esc(it ? it.color : '#5B5672')}"></i> ${esc(it ? it.name : '（削除済み）')}　${esc(hhmm(s.start_time))}〜${esc(hhmm(s.end_time))}</b>${s.memo ? `<span class="sub">${esc(s.memo)}</span>` : ''}</div>
+      <div class="lbtn"><button class="btn ghost sm" data-act="editSched" data-id="${s.id}">編集</button><button class="btn danger sm" data-act="delSched" data-id="${s.id}">削除</button></div></div>`;
+  }).join('') : '<p class="empty">この日の稼働予定はありません。</p>';
+  return `<div class="mh"><h2>${esc(dateLabel(date))}の稼働</h2><button class="x" data-act="close" aria-label="閉じる">✕</button></div>
+    ${ui.wf ? '<p class="sub">※ インターンの絞り込みを適用中です</p>' : ''}${body}
+    <div class="mf"><button class="btn pri" data-act="newSched" data-date="${date}">＋ 稼働を追加</button><button class="btn ghost" data-act="close">閉じる</button></div>`;
+}
+ACT.dayWork = d => openModal(() => dayWorkHtml(d.date), {live: true});
+
+function schedForm(id, date) {
+  const s = id ? S.schedules.find(x => x.id === id) : {work_date: date || todayStr(), start_time: '10:00', end_time: '15:00', intern_id: ui.wf || ''};
+  if (!s) return '';
+  const x = k => esc(s[k] ?? '');
+  return `<form data-submit="sched" data-id="${id || ''}">
+    <div class="mh"><h2>${id ? '稼働を編集' : '稼働を追加'}</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
+    <div class="fgrid">
+      <div class="f full"><label>インターン名</label><select name="intern_id" required><option value="">選択してください</option>${S.interns.map(it => `<option value="${it.id}" ${s.intern_id === it.id ? 'selected' : ''}>${esc(it.name)}</option>`).join('')}</select></div>
+      <div class="f full"><label>稼働日</label><input type="date" name="work_date" value="${x('work_date')}" required></div>
+      <div class="f"><label>開始時間</label><input type="time" name="start_time" value="${x('start_time')}" required></div>
+      <div class="f"><label>終了時間</label><input type="time" name="end_time" value="${x('end_time')}" required></div>
+      <div class="f full"><label>作業内容・メモ（任意）</label><textarea name="memo">${x('memo')}</textarea></div>
+    </div>
+    <div class="mf end"><button type="button" class="btn ghost" data-act="close">キャンセル</button><button type="submit" class="btn pri">保存</button></div>
+  </form>`;
+}
+ACT.newSched = d => {
+  if (!S.interns.length) { toast('先にインターンを登録してください', true); return ACT.internMgr(); }
+  openModal(() => schedForm(null, d.date));
+};
+ACT.editSched = d => openModal(() => schedForm(d.id));
+SUB.sched = async (f, form) => {
+  const id = form.dataset.id;
+  const rec = {intern_id: nn(f.intern_id), work_date: nn(f.work_date), start_time: nn(f.start_time), end_time: nn(f.end_time), memo: nn(f.memo)};
+  if (!rec.intern_id || !rec.work_date || !rec.start_time || !rec.end_time) return toast('必須項目を入力してください', true);
+  if (rec.end_time <= rec.start_time) return toast('終了時間は開始時間より後にしてください', true);
+  if (id) await q(db.from('schedules').update(rec).eq('id', id)); else await q(db.from('schedules').insert(rec));
+  closeModal(); await reload(['schedules']); toast('保存しました');
+};
+ACT.delSched = async d => {
+  const s = S.schedules.find(x => x.id === d.id), it = internOf(s.intern_id);
+  if (!await confirmDialog(`${fmtDate(s.work_date)} ${it ? it.name : ''} ${hhmm(s.start_time)}〜${hhmm(s.end_time)} の稼働予定を削除しますか？`)) return;
+  await q(db.from('schedules').delete().eq('id', d.id));
+  await reload(['schedules']); toast('削除しました');
+};
+
+/* インターン管理 */
+function internMgrHtml() {
+  const rows = S.interns.length ? S.interns.map(it => {
+    const n = S.schedules.filter(s => s.intern_id === it.id).length;
+    return `<div class="lrow"><div class="lmain inline"><i class="dot lg" style="background:${esc(it.color)}"></i><b>${esc(it.name)}</b><span class="sub">稼働予定 ${n}件</span></div>
+      <div class="lbtn"><button class="btn ghost sm" data-act="editIntern" data-id="${it.id}">編集</button><button class="btn danger sm" data-act="delIntern" data-id="${it.id}">削除</button></div></div>`;
+  }).join('') : '<p class="empty">インターンが未登録です。</p>';
+  return `<div class="mh"><h2>インターン管理</h2><button class="x" data-act="close" aria-label="閉じる">✕</button></div>${rows}
+    <div class="mf"><button class="btn pri" data-act="newIntern">＋ インターンを追加</button><button class="btn ghost" data-act="close">閉じる</button></div>`;
+}
+ACT.internMgr = () => openModal(internMgrHtml, {live: true});
+function internForm(id) {
+  const it = id ? internOf(id) : null, used = S.interns.map(x => x.color);
+  const col = it ? it.color : (INTERN_COLORS.find(c => !used.includes(c)) || INTERN_COLORS[0]);
+  return `<form data-submit="intern" data-id="${id || ''}">
+    <div class="mh"><h2>${id ? 'インターンを編集' : 'インターンを追加'}</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
+    <div class="fgrid">
+      <div class="f full"><label>名前</label><input name="name" value="${esc(it ? it.name : '')}" required></div>
+      <div class="f full"><label>カラー</label><input type="color" name="color" value="${esc(/^#[0-9a-f]{6}$/i.test(col) ? col : '#E5386D')}">
+        <div class="swatches">${INTERN_COLORS.map(c => `<button type="button" style="background:${c}" data-act="pickColor" data-c="${c}" aria-label="${c}"></button>`).join('')}</div></div>
+    </div>
+    <div class="mf end"><button type="button" class="btn ghost" data-act="close">キャンセル</button><button type="submit" class="btn pri">保存</button></div>
+  </form>`;
+}
+ACT.pickColor = (d, el) => { el.closest('form').elements.color.value = d.c; };
+ACT.newIntern = () => openModal(() => internForm(null));
+ACT.editIntern = d => openModal(() => internForm(d.id));
+SUB.intern = async (f, form) => {
+  const id = form.dataset.id, name = nn(f.name);
+  if (!name) return toast('名前を入力してください', true);
+  const rec = {name, color: f.color};
+  if (id) await q(db.from('interns').update(rec).eq('id', id)); else await q(db.from('interns').insert({...rec, sort_order: nextOrder('interns')}));
+  closeModal(); await reload(['interns']); toast('保存しました');
+};
+ACT.delIntern = async d => {
+  const it = internOf(d.id), n = S.schedules.filter(s => s.intern_id === d.id).length;
+  if (!await confirmDialog(`インターン「${it.name}」を削除しますか？${n ? `\n登録済みの稼働予定 ${n}件も一緒に削除されます。` : ''}`)) return;
+  await q(db.from('schedules').delete().eq('intern_id', d.id));
+  await q(db.from('interns').delete().eq('id', d.id));
+  if (ui.wf === d.id) ui.wf = '';
+  await reload(['interns', 'schedules']); toast('削除しました');
+};
+
+/* ============================================================
+   ④ インサイト集計
+============================================================ */
+function pageInsights() {
+  const m = insMapOf();
+  const eligible = S.videos.filter(v => v.status === '投稿完了' || m.has(v.id));
+  const done = eligible.filter(v => m.has(v.id)).length, late = eligible.filter(v => isLate(v, m)).length;
+  let rows = eligible;
+  if (ui.insAccount) rows = rows.filter(v => v.account_id === ui.insAccount);
+  if (ui.insPending) rows = rows.filter(v => !m.has(v.id));
+  rows = [...rows].sort((a, b) => (isLate(b, m) - isLate(a, m)) || (b.scheduled_date || '').localeCompare(a.scheduled_date || ''));
+  const body = rows.map(v => {
+    const i = m.get(v.id), a = accOf(v.account_id), lt = isLate(v, m), due = v.scheduled_date ? addDays(v.scheduled_date, 7) : '';
+    const num = k => i && i[k] !== null && i[k] !== undefined ? Number(i[k]).toLocaleString() : '—';
+    const fd = i && i.follower_diff !== null && i.follower_diff !== undefined ? (i.follower_diff > 0 ? '+' : '') + i.follower_diff : '—';
+    return `<div class="irow${lt ? ' late' : ''}" data-act="insight" data-vid="${v.id}" tabindex="0" role="button">
+      <div class="vmain"><b>${esc(v.title || '（無題）')}</b><span class="sub">${a ? esc(a.name) : 'アカウント未定'}</span></div>
+      <div data-l="投稿日">${v.scheduled_date ? esc(fmtDate(v.scheduled_date)) : '未設定'}${due ? `<span class="sub"> 集計目安 ${esc(fmtDate(due))}</span>` : ''}</div>
+      <div data-l="状況">${i ? `<span class="donetxt">✅ 集計済み${i.collected_date ? '（' + esc(fmtDate(i.collected_date)) + '）' : ''}</span>` : lt ? `<span class="latetxt">⚠ 未集計・${daysDiff(v.scheduled_date, todayStr()) - 7}日超過</span>` : '未集計'}</div>
+      <div data-l="再生">${num('plays')}</div><div data-l="いいね">${num('likes')}</div><div data-l="コメント">${num('comments')}</div><div data-l="保存">${num('saves')}</div>
+      <div data-l="フォロワー増減">${fd}</div>
+      <div><button class="btn ghost sm" data-act="insight" data-vid="${v.id}">${i ? '編集' : '入力'}</button></div></div>`;
+  }).join('');
+  return `<div class="ph"><h1>インサイト集計</h1></div>
+    <div class="summary"><span>集計済み ${done}件</span><span>未集計 ${eligible.length - done}件</span><span class="${late ? 'latetxt' : ''}">期限超過 ${late}件</span></div>
+    <div class="filters">
+      <label class="chk"><input type="checkbox" data-ins="pending" ${ui.insPending ? 'checked' : ''}>未集計のみ表示</label>
+      <select data-ins="account" aria-label="アカウント"><option value="">アカウント：すべて</option>${S.accounts.map(a => `<option value="${a.id}" ${ui.insAccount === a.id ? 'selected' : ''}>${esc(a.platform)}｜${esc(a.name)}</option>`).join('')}</select></div>
+    ${rows.length ? `<div class="tbl"><div class="ihead"><div>動画</div><div>投稿日</div><div>状況</div><div>再生</div><div>いいね</div><div>コメント</div><div>保存</div><div>フォロワー増減</div><div></div></div>${body}</div>`
+      : empty(eligible.length ? '条件に合う動画がありません。' : '「投稿完了」の動画がまだありません。投稿後1週間でインサイトを集計します。')}
+    <p class="sub" style="margin-top:12px">集計は投稿の1週間後に行います。投稿日は動画の「投稿予定日」を基準にしています。</p>`;
+}
+function insightForm(vid) {
+  const v = S.videos.find(x => x.id === vid); if (!v) return '';
+  const i = S.insights.find(x => x.video_id === vid) || {}, a = accOf(v.account_id);
+  const n = k => esc(i[k] ?? '');
+  return `<form data-submit="insight" data-vid="${vid}" data-id="${i.id || ''}">
+    <div class="mh"><h2>📊 インサイト入力</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
+    <div class="vinfo"><b>${esc(v.title || '（無題）')}</b><br>${a ? esc(a.platform) + '｜' + esc(a.name) : 'アカウント未定'}　投稿予定日：${v.scheduled_date ? esc(fmtDate(v.scheduled_date)) : '未設定'}${v.scheduled_date ? '　集計目安：' + esc(fmtDate(addDays(v.scheduled_date, 7))) : ''}</div>
+    <div class="fgrid">
+      <div class="f"><label>再生数</label><input type="number" inputmode="numeric" name="plays" value="${n('plays')}"></div>
+      <div class="f"><label>いいね数</label><input type="number" inputmode="numeric" name="likes" value="${n('likes')}"></div>
+      <div class="f"><label>コメント数</label><input type="number" inputmode="numeric" name="comments" value="${n('comments')}"></div>
+      <div class="f"><label>保存数（Instagram）</label><input type="number" inputmode="numeric" name="saves" value="${n('saves')}"></div>
+      <div class="f"><label>フォロワー増減（±数値）</label><input type="number" inputmode="numeric" name="follower_diff" value="${n('follower_diff')}" placeholder="例：+12 / -3"></div>
+      <div class="f"><label>集計日</label><input type="date" name="collected_date" value="${esc(i.collected_date || todayStr())}"></div>
+      <div class="f full"><label>メモ</label><textarea name="memo">${n('memo')}</textarea></div>
+    </div>
+    <div class="mf">${i.id ? `<button type="button" class="btn danger" data-act="delInsight" data-id="${i.id}">集計を削除</button>` : '<span></span>'}
+      <div class="grp"><button type="button" class="btn ghost" data-act="close">キャンセル</button><button type="submit" class="btn pri">保存</button></div></div>
+  </form>`;
+}
+ACT.insight = d => openModal(() => insightForm(d.vid));
+SUB.insight = async (f, form) => {
+  const rec = {video_id: form.dataset.vid, plays: numOrNull(f.plays), likes: numOrNull(f.likes), comments: numOrNull(f.comments), saves: numOrNull(f.saves),
+    follower_diff: numOrNull(f.follower_diff), memo: nn(f.memo), collected_date: nn(f.collected_date)};
+  const id = form.dataset.id;
+  if (id) await q(db.from('insights').update(rec).eq('id', id)); else await q(db.from('insights').insert(rec));
+  closeModal(); await reload(['insights']); toast('保存しました');
+};
+ACT.delInsight = async d => {
+  if (!await confirmDialog('この動画のインサイト集計を削除しますか？')) return;
+  await q(db.from('insights').delete().eq('id', d.id));
+  closeModal(); await reload(['insights']); toast('削除しました');
+};
+
+/* ============================================================
+   ⑤ 素材・リンク管理
+============================================================ */
+function linkRow(l) {
+  const href = safeUrl(l.url);
+  return `<div class="lrow"><div class="lmain"><b>${esc(l.name)}</b><span class="lurl">${esc(l.url)}</span>${l.description ? `<span class="sub">${esc(l.description)}</span>` : ''}</div>
+    <div class="lbtn"><button class="btn ghost sm" data-act="copy" data-text="${esc(l.url)}">コピー</button>
+    ${href ? `<a class="btn ghost sm" href="${esc(href)}" target="_blank" rel="noopener noreferrer">別タブで開く</a>` : ''}
+    <button class="btn ghost sm" data-act="editLink" data-id="${l.id}">編集</button><button class="btn danger sm" data-act="delLink" data-id="${l.id}">削除</button></div></div>`;
+}
+function pageLinks() {
+  const names = new Set(S.link_cats.map(c => c.name));
+  const sections = S.link_cats.map(c => {
+    const ls = S.links.filter(l => l.category === c.name);
+    return `<h2 class="sec">${esc(c.name)}<span class="sub">${ls.length}件</span></h2>${ls.length ? ls.map(linkRow).join('') : '<p class="sub">このカテゴリにはまだリンクがありません。</p>'}`;
+  }).join('');
+  const orphan = S.links.filter(l => !names.has(l.category));
+  return `<div class="ph"><h1>素材・リンク管理</h1><div class="phr"><button class="btn ghost" data-act="catMgr">カテゴリ管理</button><button class="btn pri" data-act="newLink">＋ リンクを追加</button></div></div>
+    ${S.link_cats.length ? sections : empty('まだカテゴリがありません。「カテゴリ管理」からカテゴリを追加してください。')}
+    ${orphan.length ? `<h2 class="sec">未分類<span class="sub">${orphan.length}件</span></h2>${orphan.map(linkRow).join('')}` : ''}`;
+}
+function linkForm(id) {
+  const l = id ? S.links.find(x => x.id === id) : {category: S.link_cats[0] ? S.link_cats[0].name : ''};
+  if (!l) return '';
+  const x = k => esc(l[k] ?? '');
+  const cats = S.link_cats.map(c => c.name); if (l.category && !cats.includes(l.category)) cats.push(l.category);
+  return `<form data-submit="link" data-id="${id || ''}">
+    <div class="mh"><h2>${id ? 'リンクを編集' : 'リンクを追加'}</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
+    <div class="fgrid">
+      <div class="f full"><label>名前</label><input name="name" value="${x('name')}" required></div>
+      <div class="f full"><label>URL</label><input type="text" name="url" value="${x('url')}" placeholder="https://" required></div>
+      <div class="f full"><label>カテゴリ</label><select name="category" required>${cats.map(c => `<option ${l.category === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+      <div class="f full"><label>メモ</label><textarea name="description">${x('description')}</textarea></div>
+    </div>
+    <div class="mf end"><button type="button" class="btn ghost" data-act="close">キャンセル</button><button type="submit" class="btn pri">保存</button></div>
+  </form>`;
+}
+ACT.newLink = () => {
+  if (!S.link_cats.length) { toast('先にカテゴリを追加してください', true); return ACT.catMgr(); }
+  openModal(() => linkForm(null));
+};
+ACT.editLink = d => openModal(() => linkForm(d.id));
+SUB.link = async (f, form) => {
+  const id = form.dataset.id, rec = {name: nn(f.name), url: normUrl(f.url), category: nn(f.category), description: nn(f.description)};
+  if (!rec.name || !rec.url || !rec.category) return toast('名前・URL・カテゴリは必須です', true);
+  if (id) await q(db.from('links').update(rec).eq('id', id)); else await q(db.from('links').insert({...rec, sort_order: nextOrder('links')}));
+  closeModal(); await reload(['links']); toast('保存しました');
+};
+ACT.delLink = async d => {
+  const l = S.links.find(x => x.id === d.id);
+  if (!await confirmDialog(`リンク「${l.name}」を削除しますか？`)) return;
+  await q(db.from('links').delete().eq('id', d.id)); await reload(['links']); toast('削除しました');
+};
+
+/* カテゴリ管理 */
+function catMgrHtml() {
+  const rows = S.link_cats.length ? S.link_cats.map(c => {
+    const n = S.links.filter(l => l.category === c.name).length;
+    return `<div class="lrow"><div class="lmain inline"><b>${esc(c.name)}</b><span class="sub">リンク ${n}件</span></div>
+      <div class="lbtn"><button class="btn ghost sm" data-act="editCat" data-id="${c.id}">名前を変更</button><button class="btn danger sm" data-act="delCat" data-id="${c.id}">削除</button></div></div>`;
+  }).join('') : '<p class="empty">カテゴリがありません。</p>';
+  return `<div class="mh"><h2>カテゴリ管理</h2><button class="x" data-act="close" aria-label="閉じる">✕</button></div>${rows}
+    <div class="mf"><button class="btn pri" data-act="newCat">＋ カテゴリを追加</button><button class="btn ghost" data-act="close">閉じる</button></div>`;
+}
+ACT.catMgr = () => openModal(catMgrHtml, {live: true});
+function catForm(id) {
+  const c = id ? S.link_cats.find(x => x.id === id) : null;
+  return `<form data-submit="cat" data-id="${id || ''}">
+    <div class="mh"><h2>${id ? 'カテゴリ名を変更' : 'カテゴリを追加'}</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
+    <div class="f"><label>カテゴリ名</label><input name="name" value="${esc(c ? c.name : '')}" required></div>
+    <div class="mf end"><button type="button" class="btn ghost" data-act="close">キャンセル</button><button type="submit" class="btn pri">保存</button></div>
+  </form>`;
+}
+ACT.newCat = () => openModal(() => catForm(null));
+ACT.editCat = d => openModal(() => catForm(d.id));
+SUB.cat = async (f, form) => {
+  const id = form.dataset.id, name = nn(f.name);
+  if (!name) return toast('カテゴリ名を入力してください', true);
+  if (S.link_cats.some(c => c.name === name && c.id !== id)) return toast('同じ名前のカテゴリが既にあります', true);
+  if (id) {
+    const old = S.link_cats.find(c => c.id === id).name;
+    await q(db.from('link_cats').update({name}).eq('id', id));
+    if (old !== name) await q(db.from('links').update({category: name}).eq('category', old));
+  } else await q(db.from('link_cats').insert({name, sort_order: nextOrder('link_cats')}));
+  closeModal(); await reload(['link_cats', 'links']); toast('保存しました');
+};
+ACT.delCat = async d => {
+  const c = S.link_cats.find(x => x.id === d.id), n = S.links.filter(l => l.category === c.name).length;
+  if (n > 0) { await confirmDialog(`カテゴリ「${c.name}」には ${n}件のリンクがあるため削除できません。\n先にリンクを別のカテゴリへ移すか、削除してください。`, {alertOnly: true}); return; }
+  if (!await confirmDialog(`カテゴリ「${c.name}」を削除しますか？`)) return;
+  await q(db.from('link_cats').delete().eq('id', d.id)); await reload(['link_cats']); toast('削除しました');
+};
+
+/* ============================================================
+   初回セットアップ / 起動
+============================================================ */
+function showSetup(msg) {
+  $('#app').innerHTML = `<div class="setup"><div class="setup-in">
+    <h1>Supabase に接続します</h1>
+    <p class="sub" style="margin:0 0 16px">最初に1回だけ設定します。入力した情報はこのブラウザ（localStorage）にだけ保存されます。</p>
+    <ol>
+      <li><a href="https://supabase.com" target="_blank" rel="noopener noreferrer">supabase.com</a> でプロジェクトを作成します。</li>
+      <li>左メニューの「SQL Editor」を開き、下のSQLを貼り付けて「Run」を押します（テーブルが作られます）。</li>
+      <li>「Project Settings → API」にある <b>Project URL</b> と <b>anon public</b> キーを、下のフォームに入力します。</li>
+    </ol>
+    <pre id="sqlbox">${esc(SQL_TEXT)}</pre>
+    <div style="margin:10px 0 22px"><button class="btn ghost sm" data-act="copySql">SQLをコピー</button></div>
+    ${msg ? `<div class="errbox">${esc(msg)}</div>` : ''}
+    <form data-submit="setup"><div class="fgrid">
+      <div class="f full"><label>Project URL</label><input name="url" placeholder="https://xxxxxxxx.supabase.co" value="${esc(localStorage.getItem(LS_URL) || '')}" required></div>
+      <div class="f full"><label>anon public キー</label><input name="key" placeholder="eyJhbGciOi..." value="${esc(localStorage.getItem(LS_KEY) || '')}" required autocomplete="off"></div>
+    </div><div class="mf end"><button type="submit" class="btn pri">接続して始める</button></div></form>
+  </div></div>`;
+}
+ACT.copySql = () => copyText(SQL_TEXT);
+SUB.setup = async f => {
+  let url = f.url.trim().replace(/\/+$/, ''); const key = f.key.trim();
+  if (!/^https:\/\//i.test(url)) return toast('Project URL は https:// から入力してください', true);
+  if (!window.supabase) return toast('Supabase ライブラリを読み込めませんでした。ネットワークを確認してください', true);
+  const test = window.supabase.createClient(url, key);
+  const {error} = await test.from('accounts').select('id').limit(1);
+  if (error) {
+    const missing = /does not exist|schema cache|42P01|PGRST205/i.test((error.code || '') + ' ' + (error.message || ''));
+    return showSetup(missing ? 'テーブルが見つかりません。手順2のSQLを SQL Editor で実行してから、もう一度お試しください。' : '接続できませんでした：' + (error.message || '不明なエラー') + '\nURLとキーをご確認ください。');
+  }
+  localStorage.setItem(LS_URL, url); localStorage.setItem(LS_KEY, key);
+  await boot();
+};
+
+async function boot() {
+  const url = localStorage.getItem(LS_URL), key = localStorage.getItem(LS_KEY);
+  if (!url || !key) return showSetup();
+  if (!window.supabase) return showSetup('Supabase ライブラリを読み込めませんでした。ネットワーク接続を確認して再読み込みしてください。');
+  db = window.supabase.createClient(url, key);
+  try {
+    await loadAll();
+    if (!S.accounts.length) { await q(db.from('accounts').insert(SEED_ACCOUNTS)); await load('accounts'); }
+  } catch (e) {
+    console.error(e);
+    return showSetup('データを読み込めませんでした：' + (e.message || e) + '\nテーブル作成のSQLを実行済みか、URLとキーが正しいかご確認ください。');
+  }
+  const h = location.hash.slice(1); if (PAGES.some(p => p.id === h)) ui.page = h;
+  renderShell(); renderPage();
+}
+boot();
+</script>
+</body>
+</html>
