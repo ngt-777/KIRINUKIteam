@@ -165,6 +165,16 @@ h1,h2,h3{margin:0}
 .swatches button{width:30px;height:30px;border-radius:50%}
 .vinfo{background:var(--field);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-weight:500}
 .vinfo b{font-weight:900;font-size:18px}
+.thumb-wrap{margin-bottom:16px}
+.thumb-wrap img{width:100%;max-height:280px;object-fit:contain;border-radius:12px;background:#111;display:block}
+.thumb-drop{border:2.5px dashed #C8C5E0;border-radius:12px;padding:28px 16px;text-align:center;cursor:pointer;font-weight:700;color:var(--sub);transition:background .15s}
+.thumb-drop:hover,.thumb-drop.drag{background:#EBE9F8;border-color:var(--accent)}
+.thumb-drop input{display:none}
+.drow{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.drow .f{flex:1;min-width:160px}
+.dval{padding:10px 12px;background:var(--field);border-radius:10px;min-height:38px;word-break:break-word;white-space:pre-wrap}
+.dlink{color:var(--accent);font-weight:700;text-decoration:none;word-break:break-all}
+.dlink:hover{text-decoration:underline}
 
 #toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);background:var(--ink);color:#fff;padding:12px 22px;border-radius:999px;font-weight:700;opacity:0;pointer-events:none;transition:.2s;z-index:300;max-width:90vw}
 #toast.show{opacity:1;transform:translate(-50%,0)}
@@ -661,7 +671,7 @@ function videoList() {
   if (!list.length) return empty(S.videos.length ? '条件に合う動画がありません。' : 'まだ動画がありません。「＋ 動画を追加」から登録してください。');
   const rows = list.map(v => {
     const a = accOf(v.account_id), w = warnList(v), late = isLate(v, m);
-    return `<div class="vrow${late ? ' late' : ''}" data-act="editVideo" data-id="${v.id}" tabindex="0" role="button">
+    return `<div class="vrow${late ? ' late' : ''}" data-act="viewVideo" data-id="${v.id}" tabindex="0" role="button">
       <div class="c-warn">${w.length ? `<span class="warnic" title="${esc(w.join(' / '))}">⚠</span>` : ''}</div>
       <div data-l="制作日">${esc(fmtDate(v.created_date))}</div>
       <div class="vmain"><b>${esc(v.title) || '（無題）'}</b>${v.subtitle ? `<span class="sub">${esc(v.subtitle)}</span>` : ''}${v.category ? `<span class="sub">${esc(v.category)}</span>` : ''}${w.length ? `<span class="wtxt">⚠ ${esc(w.join('・'))}</span>` : ''}</div>
@@ -696,7 +706,7 @@ function dayVideosHtml(date) {
   const m = insMapOf(), items = filteredVideos().filter(v => v.scheduled_date === date).sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || ''));
   const body = items.length ? items.map(v => {
     const a = accOf(v.account_id);
-    return `<div class="lrow"><div class="lmain" data-act="editVideo" data-id="${v.id}" style="cursor:pointer" tabindex="0" role="button">
+    return `<div class="lrow"><div class="lmain" data-act="viewVideo" data-id="${v.id}" style="cursor:pointer" tabindex="0" role="button">
       <b>${v.scheduled_time ? esc(hhmm(v.scheduled_time)) + '　' : ''}${esc(v.title || '（無題）')}</b>
       <span class="sub">${a ? `<i class="dot" style="background:${esc(a.color)}"></i> ${esc(a.name)}` : 'アカウント未定'}　${stHtml(v.status)}</span></div>
       <div class="lbtn">${insBtn(v, m)}</div></div>`;
@@ -715,6 +725,15 @@ function videoForm(id, preset = {}) {
   return `<form data-submit="video" data-id="${id || ''}">
     <div class="mh"><h2>${id ? '動画を編集' : '動画を追加'}</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
     <div class="fgrid">
+      <div class="fsec">サムネ画像（任意）</div>
+      <div class="f full">
+        ${v.thumbnail ? `<div class="thumb-wrap" style="margin-bottom:10px"><img src="${esc(v.thumbnail)}" alt="サムネ"><button type="button" class="btn danger sm" style="margin-top:8px" data-act="clearThumb">画像を削除</button></div>` : ''}
+        <label class="thumb-drop" id="thumbDrop">
+          <input type="file" name="thumbnail_file" accept="image/*" id="thumbFile">
+          <span id="thumbLabel">📷 クリックまたはドラッグ＆ドロップで画像を追加</span>
+        </label>
+        <input type="hidden" name="thumbnail" value="${x('thumbnail')}">
+      </div>
       <div class="fsec">制作情報</div>
       <div class="f"><label>制作日（任意）</label><input type="date" name="created_date" value="${x('created_date')}"></div>
       <div class="f"><label>カテゴリ <span style="color:var(--accent)">*</span></label>
@@ -742,6 +761,28 @@ function videoForm(id, preset = {}) {
       <div class="grp"><button type="button" class="btn ghost" data-act="close">キャンセル</button><button type="submit" class="btn pri">保存</button></div></div>
   </form>`;
 }
+function videoDetailHtml(id) {
+  const v = S.videos.find(x => x.id === id); if (!v) return '';
+  const a = accOf(v.account_id), m = insMapOf();
+  const row = (label, val) => `<div class="f"><div class="lab">${label}</div><div class="dval">${val || '（未入力）'}</div></div>`;
+  const linkRow = (label, url) => `<div class="f"><div class="lab">${label}</div><div class="dval">${url ? `<a class="dlink" href="${esc(safeUrl(url))}" target="_blank" rel="noopener noreferrer">${esc(url)} ↗</a>` : '（未入力）'}</div></div>`;
+  return `<div class="mh"><h2>${esc(v.title || '（タイトル未入力）')}</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
+    ${v.thumbnail ? `<div class="thumb-wrap"><img src="${esc(v.thumbnail)}" alt="サムネ"></div>` : ''}
+    <div style="margin-bottom:14px">${stHtml(v.status)}${a ? `　<span class="st"><i class="dot" style="background:${esc(a.color)}"></i>${esc(a.name)}</span>` : '　アカウント未定'}</div>
+    <div class="fgrid">
+      ${row('カテゴリ', esc(v.category))}
+      ${row('制作日', v.created_date ? esc(fmtDate(v.created_date)) : null)}
+      ${row('投稿日', v.scheduled_date ? esc(fmtDate(v.scheduled_date)) + (v.scheduled_time ? '　' + esc(hhmm(v.scheduled_time)) : '') : null)}
+      <div class="f full"><div class="lab">サムネタイトル</div><div class="dval">${v.title ? esc(v.title).replace(/\n/g,'<br>') : '（未入力）'}</div></div>
+      <div class="f full"><div class="lab">投稿文</div><div class="dval">${v.subtitle ? esc(v.subtitle).replace(/\n/g,'<br>') : '（未入力）'}</div></div>
+      <div class="f full"><div class="lab">シーン・切り抜き箇所</div><div class="dval">${v.notes ? esc(v.notes).replace(/\n/g,'<br>') : '（未入力）'}</div></div>
+      ${linkRow('格納先URL', v.storage_url)}
+      ${linkRow('投稿URL', v.post_url)}
+    </div>
+    <div class="mf"><div class="grp">${insBtn(v, m)}<button type="button" class="btn ghost" data-act="close">閉じる</button></div>
+      <button type="button" class="btn pri" data-act="editVideo" data-id="${id}">編集する</button></div>`;
+}
+ACT.viewVideo = d => openModal(() => videoDetailHtml(d.id), {wide: true});
 ACT.catSelChange = (d, el) => {
   const form = el.closest('form');
   const other = form.querySelector('#catother');
@@ -761,10 +802,45 @@ document.addEventListener('input', e => {
     if (hidden) hidden.value = t.value;
   }
 });
+document.addEventListener('change', e => {
+  if (e.target.id === 'thumbFile' && e.target.files[0]) setThumbPreview(e.target.files[0], e.target.closest('form'));
+}, true);
+document.addEventListener('dragover', e => { if (e.target.closest('#thumbDrop')) e.preventDefault(); });
+document.addEventListener('dragenter', e => { const d = e.target.closest('#thumbDrop'); if (d) d.classList.add('drag'); });
+document.addEventListener('dragleave', e => { const d = e.target.closest('#thumbDrop'); if (d && !d.contains(e.relatedTarget)) d.classList.remove('drag'); });
+document.addEventListener('drop', e => {
+  const d = e.target.closest('#thumbDrop'); if (!d) return;
+  e.preventDefault(); d.classList.remove('drag');
+  const file = e.dataTransfer.files[0]; if (file && file.type.startsWith('image/')) setThumbPreview(file, d.closest('form'));
+});
+function setThumbPreview(file, form) {
+  if (!form) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    form.elements.thumbnail.value = ev.target.result;
+    const lbl = form.querySelector('#thumbLabel');
+    if (lbl) { lbl.innerHTML = `<img src="${esc(ev.target.result)}" style="max-height:160px;border-radius:8px;object-fit:contain">`; }
+  };
+  r.readAsDataURL(file);
+}
+ACT.clearThumb = (d, el) => {
+  const form = el.closest('form');
+  if (form.elements.thumbnail) form.elements.thumbnail.value = '';
+  const wrap = el.closest('.thumb-wrap'); if (wrap) wrap.remove();
+};
 ACT.newVideo = d => openModal(() => videoForm(null, {date: d.date}));
 ACT.editVideo = d => openModal(() => videoForm(d.id));
 SUB.video = async (f, form) => {
   const id = form.dataset.id;
+  // サムネ画像処理
+  const fileInput = form.querySelector('#thumbFile');
+  if (fileInput && fileInput.files && fileInput.files[0]) {
+    const file = fileInput.files[0];
+    if (file.size > 2 * 1024 * 1024) return toast('画像は2MB以下にしてください', true);
+    f.thumbnail = await new Promise((res, rej) => {
+      const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file);
+    });
+  }
   // カテゴリ：「その他」選択時は自由入力欄の値を使う
   const catSel = (f.category_sel || '').trim();
   const catOther = (f.category_other || '').trim();
@@ -780,7 +856,8 @@ SUB.video = async (f, form) => {
     scheduled_time: nn(f.scheduled_time),
     post_url: normUrl(f.post_url),
     status: f.status || '編集中',
-    notes: nn(f.notes)
+    notes: nn(f.notes),
+    thumbnail: nn(f.thumbnail)
   };
   // 未入力チェック（警告のみ・保存は通す）
   const missing = [];
@@ -954,12 +1031,13 @@ function insightForm(vid) {
   const n = k => esc(i[k] ?? '');
   return `<form data-submit="insight" data-vid="${vid}" data-id="${i.id || ''}">
     <div class="mh"><h2>📊 インサイト入力</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
-    <div class="vinfo"><b>${esc(v.title || '（無題）')}</b><br>${a ? esc(a.platform) + '｜' + esc(a.name) : 'アカウント未定'}　投稿予定日：${v.scheduled_date ? esc(fmtDate(v.scheduled_date)) : '未設定'}${v.scheduled_date ? '　集計目安：' + esc(fmtDate(addDays(v.scheduled_date, 7))) : ''}</div>
+    ${v.thumbnail ? `<div class="thumb-wrap"><img src="${esc(v.thumbnail)}" alt="サムネ"></div>` : ''}
+    <div class="vinfo"><b>${esc(v.title || '（タイトル未入力）')}</b><br>${a ? esc(a.platform) + '｜' + esc(a.name) : 'アカウント未定'}　投稿日：${v.scheduled_date ? esc(fmtDate(v.scheduled_date)) : '未設定'}${v.scheduled_date ? '　集計目安：' + esc(fmtDate(addDays(v.scheduled_date, 7))) : ''}</div>
     <div class="fgrid">
       <div class="f"><label>再生数</label><input type="number" inputmode="numeric" name="plays" value="${n('plays')}"></div>
       <div class="f"><label>いいね数</label><input type="number" inputmode="numeric" name="likes" value="${n('likes')}"></div>
       <div class="f"><label>コメント数</label><input type="number" inputmode="numeric" name="comments" value="${n('comments')}"></div>
-      <div class="f"><label>保存数（Instagram）</label><input type="number" inputmode="numeric" name="saves" value="${n('saves')}"></div>
+      <div class="f"><label>保存数</label><input type="number" inputmode="numeric" name="saves" value="${n('saves')}"></div>
       <div class="f"><label>フォロワー増減（±数値）</label><input type="number" inputmode="numeric" name="follower_diff" value="${n('follower_diff')}" placeholder="例：+12 / -3"></div>
       <div class="f"><label>集計日</label><input type="date" name="collected_date" value="${esc(i.collected_date || todayStr())}"></div>
       <div class="f full"><label>メモ</label><textarea name="memo">${n('memo')}</textarea></div>
