@@ -524,7 +524,7 @@ const dnumCls = i => i % 7 === 0 ? 'sun' : i % 7 === 6 ? 'sat' : '';
 /* ============================================================
    ① アカウント管理
 ============================================================ */
-const ACC_FIELDS = ['name','platform','handle','profile_text','email','password','registered_date','account_url','ms_account','ms_birthdate'];
+const ACC_FIELDS = ['name','platform','handle','email','password','registered_date','account_url','ms_account','ms_birthdate'];
 const missCount = a => ACC_FIELDS.filter(k => !a[k] || !String(a[k]).trim()).length;
 
 function pageAccounts() {
@@ -551,7 +551,8 @@ function accountDetailHtml(id) {
       <div class="f"><label>アカウント名</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('name')}</div></div>
       <div class="f"><label>媒体</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('platform')}</div></div>
       <div class="f"><label>ID</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('handle')}</div></div>
-      <div class="f"><label>プロフィール文</label><div style="padding:10px 12px;background:var(--field);border-radius:10px;min-height:36px">${v('profile_text') || '（未入力）'}</div></div>
+      <div class="f full"><label>プロフィール文</label><div style="padding:10px 12px;background:var(--field);border-radius:10px;min-height:36px">${v('profile_text') || '（未入力）'}</div></div>
+      <div class="f"><label>フォロワー数</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${a.followers !== null && a.followers !== undefined ? Number(a.followers).toLocaleString() + ' 人' : '（未入力）'}</div></div>
       <div class="f full"><label>アカウント傾向</label><div style="padding:10px 12px;background:var(--field);border-radius:10px;min-height:36px">${v('tendency') || '（未入力）'}</div></div>
       <div class="f"><label>登録メールアドレス</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('email') || '（未入力）'}</div></div>
       <div class="f"><label>登録年月日</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('registered_date') ? esc(fmtDate(v('registered_date'))) : '（未入力）'}</div></div>
@@ -573,8 +574,9 @@ function accountForm(id) {
       <div class="f"><label>媒体</label><select name="platform">${['Instagram','TikTok','YouTube','X'].map(p => `<option ${a.platform === p ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
       <div class="f"><label>ID</label><input name="handle" value="${v('handle')}"></div>
       <div class="f"><label>カード色（動画カレンダーの色）</label><input type="color" name="color" value="${/^#[0-9a-f]{6}$/i.test(a.color || '') ? a.color : '#888888'}"></div>
-      <div class="f full"><label>プロフィール文</label><textarea name="profile_text">${v('profile_text')}</textarea></div>
-      <div class="f full"><label>アカウント傾向</label><textarea name="tendency" placeholder="例：恋愛・学園ものが中心／夜に伸びやすい など">${v('tendency')}</textarea></div>
+      <div class="f full"><label>プロフィール文（任意）</label><textarea name="profile_text">${v('profile_text')}</textarea></div>
+      <div class="f"><label>フォロワー数</label><input type="number" inputmode="numeric" name="followers" value="${esc(a.followers ?? '')}" placeholder="例：1500"></div>
+      <div class="f full"><label>アカウント傾向（任意）</label><textarea name="tendency" placeholder="例：恋愛・学園ものが中心／夜に伸びやすい など">${v('tendency')}</textarea></div>
       <div class="f"><label>登録メールアドレス</label><input type="text" name="email" value="${v('email')}" autocomplete="off"></div>
       <div class="f"><label>パスワード</label>
         <div class="pw"><input type="password" name="password" value="${v('password')}" autocomplete="new-password">
@@ -604,6 +606,7 @@ ACT.autoUrl = (d, el) => {
 SUB.account = async (f, form) => {
   const rec = {};
   ['name','platform','handle','profile_text','tendency','email','password','registered_date','account_url','ms_account','ms_birthdate','color'].forEach(k => rec[k] = nn(f[k]));
+  rec.followers = numOrNull(f.followers);
   await q(db.from('accounts').update(rec).eq('id', form.dataset.id));
   closeModal(); await reload(['accounts']); toast('保存しました');
 };
