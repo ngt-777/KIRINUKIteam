@@ -555,7 +555,7 @@ function accountDetailHtml(id) {
       <div class="f full"><label>アカウント傾向</label><div style="padding:10px 12px;background:var(--field);border-radius:10px;min-height:36px">${v('tendency') || '（未入力）'}</div></div>
       <div class="f"><label>登録メールアドレス</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('email') || '（未入力）'}</div></div>
       <div class="f"><label>登録年月日</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('registered_date') ? esc(fmtDate(v('registered_date'))) : '（未入力）'}</div></div>
-      <div class="f"><label>アカウントURL</label><div style="padding:10px 12px;background:var(--field);border-radius:10px;word-break:break-all">${v('account_url') || '（未入力）'}</div></div>
+      <div class="f"><label>アカウントURL</label><div style="padding:10px 12px;background:var(--field);border-radius:10px;word-break:break-all;pointer-events:auto">${a.account_url ? `<a href="${esc(safeUrl(a.account_url))}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);font-weight:700;text-decoration:none">${esc(a.account_url)} ↗</a>` : '（未入力）'}</div></div>
       <div class="f"><label>Microsoftアカウント名</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('ms_account') || '（未入力）'}</div></div>
       <div class="f"><label>Microsoft生年月日</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('ms_birthdate') ? esc(fmtDate(v('ms_birthdate'))) : '（未入力）'}</div></div>
     </div>
