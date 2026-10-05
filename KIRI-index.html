@@ -516,13 +516,13 @@ const dnumCls = i => i % 7 === 0 ? 'sun' : i % 7 === 6 ? 'sat' : '';
 /* ============================================================
    ① アカウント管理
 ============================================================ */
-const ACC_FIELDS = ['name','platform','handle','profile_text','tendency','email','password','registered_date','account_url','ms_account','ms_birthdate'];
+const ACC_FIELDS = ['name','platform','handle','profile_text','email','password','registered_date','account_url','ms_account','ms_birthdate'];
 const missCount = a => ACC_FIELDS.filter(k => !a[k] || !String(a[k]).trim()).length;
 
 function pageAccounts() {
   const cards = S.accounts.map((a, i) => {
     const n = missCount(a);
-    return `<button class="acard" style="--c:${esc(a.color || '#888')}" data-act="editAccount" data-id="${a.id}">
+    return `<button class="acard" style="--c:${esc(a.color || '#888')}" data-act="viewAccount" data-id="${a.id}">
       <div class="aplat">No.${a.sort_order || i + 1}　${esc(a.platform)}</div>
       <div class="aname">${esc(a.name) || '（名称未設定）'}</div>
       <div class="ahandle">${esc(a.handle)}</div>
@@ -533,6 +533,28 @@ function pageAccounts() {
   return `<div class="ph"><h1>アカウント管理</h1></div>
     ${S.accounts.length ? `<div class="grid">${cards}</div>` : empty('アカウントがありません。')}`;
 }
+function accountDetailHtml(id) {
+  const a = S.accounts.find(x => x.id === id); if (!a) return '';
+  const v = k => esc(a[k] ?? '');
+  const n = missCount(a);
+  return `<div class="mh"><h2>No.${a.sort_order} ${esc(a.name) || '（名称未設定）'}</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
+    <div class="vinfo"><b>${esc(a.platform)}</b><br>${v('handle')}</div>
+    <div class="fgrid" style="pointer-events:none">
+      <div class="f"><label>アカウント名</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('name')}</div></div>
+      <div class="f"><label>媒体</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('platform')}</div></div>
+      <div class="f"><label>ID</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('handle')}</div></div>
+      <div class="f"><label>プロフィール文</label><div style="padding:10px 12px;background:var(--field);border-radius:10px;min-height:36px">${v('profile_text') || '（未入力）'}</div></div>
+      <div class="f full"><label>アカウント傾向</label><div style="padding:10px 12px;background:var(--field);border-radius:10px;min-height:36px">${v('tendency') || '（未入力）'}</div></div>
+      <div class="f"><label>登録メールアドレス</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('email') || '（未入力）'}</div></div>
+      <div class="f"><label>登録年月日</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('registered_date') ? esc(fmtDate(v('registered_date'))) : '（未入力）'}</div></div>
+      <div class="f"><label>アカウントURL</label><div style="padding:10px 12px;background:var(--field);border-radius:10px;word-break:break-all">${v('account_url') || '（未入力）'}</div></div>
+      <div class="f"><label>Microsoftアカウント名</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('ms_account') || '（未入力）'}</div></div>
+      <div class="f"><label>Microsoft生年月日</label><div style="padding:10px 12px;background:var(--field);border-radius:10px">${v('ms_birthdate') ? esc(fmtDate(v('ms_birthdate'))) : '（未入力）'}</div></div>
+    </div>
+    ${n ? `<div style="background:#FFE9C2;color:#7A3F00;padding:12px 14px;border-radius:10px;margin:14px 0;font-weight:700">⚠ 未入力項目：${n}件</div>` : ''}
+    <div class="mf"><button type="button" class="btn ghost" data-act="close">閉じる</button><button type="button" class="btn pri" data-act="editAccount" data-id="${a.id}">編集する</button></div>`;
+}
+ACT.viewAccount = d => openModal(() => accountDetailHtml(d.id));
 function accountForm(id) {
   const a = S.accounts.find(x => x.id === id); if (!a) return '';
   const v = k => esc(a[k] ?? '');
