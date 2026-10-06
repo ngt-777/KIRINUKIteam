@@ -1240,6 +1240,7 @@ SUB.setup = async f => {
 ============================================================ */
 const WORK_TYPES = ['切り抜き作業','投稿作業','入力作業（アプリ登録）','インサイト集計','情報修正','キャプション作成','その他'];
 const KIRI_CATS = ['渋スト','ASMR','希空ch'];
+const WORK_EXPAND = {'切り抜き作業':'kiriSection','投稿作業':'postSection','キャプション作成':'captionSection','その他':'otherSection'};
 
 function pageReport() {
   const {rf = ''} = ui;
@@ -1335,26 +1336,26 @@ function reportForm(id) {
         </div>
       </div>
 
-      <!-- 投稿本数 カテゴリ別 -->
-      <div class="f full">
+      <!-- 投稿作業 → カテゴリ別本数 -->
+      <div class="f full" id="postSection" style="display:${selTypes.includes('投稿作業') ? 'block' : 'none'}">
         <div style="background:var(--field);border-radius:12px;padding:16px 18px">
           <div class="lab" style="margin-bottom:12px">📤 投稿本数（カテゴリ別）</div>
           <div class="fgrid">
             ${KIRI_CATS.map(c => `<div class="f"><label>${c}</label>
-              <input type="number" inputmode="numeric" name="post_${c}" id="post_${c.replace(/[^\w]/g,'_')}" value="${esc(r['post_'+c] ?? '')}" placeholder="0" min="0" data-act="catCountChange" data-group="post">
+              <input type="number" inputmode="numeric" name="post_${c}" value="${esc(r['post_'+c] ?? '')}" placeholder="0" min="0">
             </div>`).join('')}
           </div>
         </div>
       </div>
 
-      <!-- キャプション作成本数 カテゴリ別 -->
-      <div class="f full">
+      <!-- キャプション作成 → カテゴリ別本数 -->
+      <div class="f full" id="captionSection" style="display:${selTypes.includes('キャプション作成') ? 'block' : 'none'}">
         <div style="background:var(--field);border-radius:12px;padding:16px 18px">
           <div class="lab" style="margin-bottom:4px">✏️ キャプション作成本数（カテゴリ別）</div>
           <div class="sub" style="margin-bottom:10px;font-size:13px">切り抜き本数から自動入力・手修正可</div>
           <div class="fgrid">
             ${KIRI_CATS.map(c => `<div class="f"><label>${c}</label>
-              <input type="number" inputmode="numeric" name="caption_${c}" id="caption_${c.replace(/[^\w]/g,'_')}" value="${esc(r['caption_'+c] ?? '')}" placeholder="0" min="0">
+              <input type="number" inputmode="numeric" name="caption_${c}" value="${esc(r['caption_'+c] ?? '')}" placeholder="0" min="0">
             </div>`).join('')}
           </div>
         </div>
@@ -1417,11 +1418,11 @@ function reportDetailHtml(id) {
 
 ACT.workTypeChk = (d, el) => {
   const form = el.closest('form');
-  const kiri = form.querySelector('#kiriSection');
-  const other = form.querySelector('#otherSection');
   const checked = [...form.querySelectorAll('input[name=work_types]:checked')].map(e => e.value);
-  if (kiri) kiri.style.display = checked.includes('切り抜き作業') ? 'block' : 'none';
-  if (other) other.style.display = checked.includes('その他') ? 'block' : 'none';
+  Object.entries(WORK_EXPAND).forEach(([type, secId]) => {
+    const sec = form.querySelector('#' + secId);
+    if (sec) sec.style.display = checked.includes(type) ? 'block' : 'none';
+  });
 };
 // 切り抜き本数入力 → キャプション欄へ自動コピー（未入力のときだけ）
 document.addEventListener('input', e => {
