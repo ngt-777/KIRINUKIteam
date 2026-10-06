@@ -184,6 +184,25 @@ h1,h2,h3{margin:0}
 .dlink{color:var(--accent);font-weight:700;text-decoration:none;word-break:break-all}
 .dlink:hover{text-decoration:underline}
 
+.rcard{background:#fff;border-radius:14px;padding:20px 22px;margin-bottom:12px;display:flex;gap:18px;align-items:flex-start;cursor:pointer;transition:transform .1s}
+.rcard:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(20,18,40,.08)}
+.rcard-left{display:flex;flex-direction:column;align-items:center;gap:6px;flex:none;width:64px}
+.rdate{font-size:13px;font-weight:700;text-align:center;color:var(--sub)}
+.rdate b{display:block;font-size:22px;font-weight:900;color:var(--ink);line-height:1}
+.rbody{flex:1;min-width:0}
+.rname{display:inline-flex;align-items:center;gap:6px;font-weight:700;margin-bottom:6px}
+.rsummary{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.rnum{display:flex;flex-direction:column;align-items:center;background:var(--field);border-radius:10px;padding:8px 14px;min-width:64px}
+.rnum b{font-size:22px;font-weight:900;line-height:1}
+.rnum small{font-size:12px;font-weight:700;color:var(--sub);margin-top:2px}
+.rmemo{font-size:14.5px;color:var(--sub);white-space:pre-wrap;word-break:break-word}
+.rtotal{display:flex;gap:16px;flex-wrap:wrap;background:#fff;border-radius:14px;padding:18px 22px;margin-bottom:20px}
+.rtotal-item{display:flex;flex-direction:column;align-items:center}
+.rtotal-item b{font-size:28px;font-weight:900;line-height:1}
+.rtotal-item small{font-size:13px;font-weight:700;color:var(--sub);margin-top:4px}
+.rtotal-sep{width:1px;background:#E6E4F2;align-self:stretch}
+.work-tags{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.work-tag{display:inline-flex;align-items:center;gap:5px;background:var(--field);border-radius:999px;padding:4px 12px;font-size:13.5px;font-weight:700}
 #toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);background:var(--ink);color:#fff;padding:12px 22px;border-radius:999px;font-weight:700;opacity:0;pointer-events:none;transition:.2s;z-index:300;max-width:90vw}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 #toast.err{background:var(--danger)}
@@ -244,7 +263,8 @@ const PAGES = [
   {id:'videos',   icon:'🎬', label:'動画・投稿管理'},
   {id:'work',     icon:'🗓️', label:'稼働カレンダー'},
   {id:'insights', icon:'📊', label:'インサイト集計'},
-  {id:'links',    icon:'🔗', label:'素材・リンク'}
+  {id:'links',    icon:'🔗', label:'素材・リンク'},
+  {id:'report',   icon:'📝', label:'業務報告'}
 ];
 const SEED_ACCOUNTS = [
   {platform:'Instagram', name:'どらま切り抜き班', handle:'@dr_kirinuki_han', profile_text:'学園モノとか恋愛ドラマが好き', color:'#D6336C'},
@@ -335,7 +355,7 @@ ALTER TABLE link_cats DISABLE ROW LEVEL SECURITY;`;
    状態
 ============================================================ */
 let db = null;
-const S = {accounts:[], videos:[], insights:[], interns:[], schedules:[], links:[], link_cats:[]};
+const S = {accounts:[], videos:[], insights:[], interns:[], schedules:[], links:[], link_cats:[], reports:[]};
 const now0 = new Date();
 const ui = {
   page: 'accounts',
@@ -386,7 +406,7 @@ async function copyText(t) {
 /* ============================================================
    Supabase
 ============================================================ */
-const ORDER = {accounts:'sort_order', interns:'sort_order', links:'sort_order', link_cats:'sort_order', videos:'created_at', insights:'created_at', schedules:'work_date'};
+const ORDER = {accounts:'sort_order', interns:'sort_order', links:'sort_order', link_cats:'sort_order', videos:'created_at', insights:'created_at', schedules:'work_date', reports:'report_date'};
 async function load(tbl) {
   const {data, error} = await db.from(tbl).select('*').order(ORDER[tbl], {ascending: true});
   if (error) throw error;
@@ -495,7 +515,7 @@ function renderShell() {
 }
 function renderPage() {
   const main = $('#main'); if (!main) return;
-  const fn = {accounts:pageAccounts, videos:pageVideos, work:pageWork, insights:pageInsights, links:pageLinks}[ui.page];
+  const fn = {accounts:pageAccounts, videos:pageVideos, work:pageWork, insights:pageInsights, links:pageLinks, report:pageReport}[ui.page];
   main.innerHTML = fn();
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('on', b.dataset.p === ui.page));
   const t = $('#topttl'); if (t) t.textContent = PAGES.find(p => p.id === ui.page).label;
@@ -1213,6 +1233,161 @@ SUB.setup = async f => {
   }
   localStorage.setItem(LS_URL, url); localStorage.setItem(LS_KEY, key);
   await boot();
+};
+
+/* ============================================================
+   ⑥ 業務報告
+============================================================ */
+const WORK_TYPES = ['切り抜き作業','投稿作業','入力作業（アプリ登録）','インサイト集計','情報修正','キャプション作成','その他'];
+
+function pageReport() {
+  const {rf = ''} = ui;
+  const list = [...S.reports].sort((a,b) => (b.report_date||'').localeCompare(a.report_date||''));
+  const filtered = rf ? list.filter(r => r.intern_id === rf) : list;
+
+  // 集計（今月）
+  const ym = todayStr().slice(0,7);
+  const thisMonth = list.filter(r => (r.report_date||'').startsWith(ym));
+  const totalMake = thisMonth.reduce((s,r) => s + (r.count_make||0), 0);
+  const totalPost = thisMonth.reduce((s,r) => s + (r.count_post||0), 0);
+  const totalCaption = thisMonth.reduce((s,r) => s + (r.count_caption||0), 0);
+
+  const chipsF = `<div class="fchips" style="margin-bottom:16px">
+    <button class="fchip ${!rf ? 'on' : ''}" data-act="repF" data-id="">全員</button>
+    ${S.interns.map(it => `<button class="fchip ${rf === it.id ? 'on' : ''}" data-act="repF" data-id="${it.id}"><i class="dot" style="background:${esc(it.color)}"></i>${esc(it.name)}</button>`).join('')}
+  </div>`;
+
+  const rows = filtered.length ? filtered.map(r => {
+    const it = internOf(r.intern_id);
+    const d = r.report_date ? parseD(r.report_date) : null;
+    const tags = (r.work_types||'').split(',').filter(Boolean).map(t => `<span class="work-tag">${esc(t)}</span>`).join('');
+    return `<div class="rcard" data-act="viewReport" data-id="${r.id}">
+      <div class="rcard-left">
+        ${d ? `<div class="rdate"><b>${d.getDate()}</b>${d.getMonth()+1}月<br>${WD[d.getDay()]}</div>` : ''}
+      </div>
+      <div class="rbody">
+        <div class="rname"><i class="dot" style="background:${esc(it ? it.color : '#888')}"></i>${esc(it ? it.name : '（削除済み）')}</div>
+        <div class="rsummary">
+          ${r.count_make ? `<div class="rnum"><b>${r.count_make}</b><small>切り抜き本数</small></div>` : ''}
+          ${r.count_post ? `<div class="rnum"><b>${r.count_post}</b><small>投稿本数</small></div>` : ''}
+          ${r.count_caption ? `<div class="rnum"><b>${r.count_caption}</b><small>キャプション</small></div>` : ''}
+        </div>
+        ${tags ? `<div class="work-tags">${tags}</div>` : ''}
+        ${r.memo ? `<div class="rmemo">${esc(r.memo)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('') : empty('まだ業務報告がありません。');
+
+  return `<div class="ph"><h1>業務報告</h1><div class="phr"><button class="btn pri" data-act="newReport">＋ 今日の報告を入力</button></div></div>
+    ${S.interns.length > 1 ? chipsF : ''}
+    <div class="rtotal">
+      <div class="rtotal-item"><b>${totalMake}</b><small>今月 切り抜き本数</small></div>
+      <div class="rtotal-sep"></div>
+      <div class="rtotal-item"><b>${totalPost}</b><small>今月 投稿本数</small></div>
+      <div class="rtotal-sep"></div>
+      <div class="rtotal-item"><b>${totalCaption}</b><small>今月 キャプション本数</small></div>
+      <div class="rtotal-sep"></div>
+      <div class="rtotal-item"><b>${thisMonth.length}</b><small>今月 報告件数</small></div>
+    </div>
+    ${rows}`;
+}
+
+ACT.repF = d => { ui.rf = d.id; renderPage(); };
+
+function reportForm(id) {
+  const r = id ? S.reports.find(x => x.id === id) : {report_date: todayStr(), intern_id: S.interns.length === 1 ? S.interns[0].id : ''};
+  if (!r) return '';
+  const x = k => esc(r[k] ?? '');
+  const selTypes = (r.work_types||'').split(',').filter(Boolean);
+  return `<form data-submit="report" data-id="${id||''}">
+    <div class="mh"><h2>${id ? '業務報告を編集' : '今日の業務報告'}</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
+    <div class="fgrid">
+      <div class="f full"><label>名前 <span style="color:var(--accent)">*</span></label>
+        <select name="intern_id" required>
+          <option value="">選択してください</option>
+          ${S.interns.map(it => `<option value="${it.id}" ${r.intern_id === it.id ? 'selected' : ''}>${esc(it.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="f full"><label>日付 <span style="color:var(--accent)">*</span></label>
+        <input type="date" name="report_date" value="${x('report_date')}" required>
+      </div>
+      <div class="fsec">今日やったこと</div>
+      <div class="f full"><label>作業内容（複数選択可）</label>
+        <div class="segs">
+          ${WORK_TYPES.map(t => `<label class="seg"><input type="checkbox" name="work_types" value="${t}" ${selTypes.includes(t) ? 'checked' : ''}><span>${t}</span></label>`).join('')}
+        </div>
+      </div>
+      <div class="f"><label>切り抜き本数</label>
+        <input type="number" inputmode="numeric" name="count_make" value="${x('count_make')}" placeholder="0" min="0">
+      </div>
+      <div class="f"><label>投稿本数</label>
+        <input type="number" inputmode="numeric" name="count_post" value="${x('count_post')}" placeholder="0" min="0">
+      </div>
+      <div class="f full"><label>キャプション作成本数</label>
+        <input type="number" inputmode="numeric" name="count_caption" value="${x('count_caption')}" placeholder="0" min="0">
+      </div>
+      <div class="f full"><label>ひとことメモ（任意）</label>
+        <textarea name="memo" placeholder="今日気づいたこと、詰まったことなど自由に">${x('memo')}</textarea>
+      </div>
+    </div>
+    <div class="mf">
+      ${id ? `<button type="button" class="btn danger" data-act="delReport" data-id="${id}">削除</button>` : '<span></span>'}
+      <div class="grp"><button type="button" class="btn ghost" data-act="close">キャンセル</button><button type="submit" class="btn pri">報告する</button></div>
+    </div>
+  </form>`;
+}
+
+function reportDetailHtml(id) {
+  const r = S.reports.find(x => x.id === id); if (!r) return '';
+  const it = internOf(r.intern_id);
+  const tags = (r.work_types||'').split(',').filter(Boolean).map(t => `<span class="work-tag">${esc(t)}</span>`).join('');
+  return `<div class="mh"><h2>業務報告の詳細</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
+    <div class="vinfo">
+      <b>${it ? esc(it.name) : '（削除済み）'}</b>　${r.report_date ? esc(dateLabel(r.report_date)) : ''}
+    </div>
+    <div class="fgrid">
+      <div class="f"><div class="lab">切り抜き本数</div><div class="dval">${r.count_make ?? 0} 本</div></div>
+      <div class="f"><div class="lab">投稿本数</div><div class="dval">${r.count_post ?? 0} 本</div></div>
+      <div class="f full"><div class="lab">キャプション作成本数</div><div class="dval">${r.count_caption ?? 0} 本</div></div>
+      <div class="f full"><div class="lab">作業内容</div><div class="dval">${tags || '（未選択）'}</div></div>
+      <div class="f full"><div class="lab">ひとことメモ</div><div class="dval">${r.memo ? esc(r.memo) : '（なし）'}</div></div>
+    </div>
+    <div class="mf end">
+      <button type="button" class="btn ghost" data-act="close">閉じる</button>
+      <button type="button" class="btn pri" data-act="editReport" data-id="${id}">編集する</button>
+    </div>`;
+}
+
+ACT.newReport = () => {
+  if (!S.interns.length) { toast('先にインターンを登録してください（稼働カレンダー→インターン管理）', true); return; }
+  openModal(() => reportForm(null));
+};
+ACT.editReport = d => openModal(() => reportForm(d.id));
+ACT.viewReport = d => openModal(() => reportDetailHtml(d.id));
+
+SUB.report = async (f, form) => {
+  const id = form.dataset.id;
+  if (!f.intern_id || !f.report_date) return toast('名前と日付は必須です', true);
+  const types = [...(form.querySelectorAll('input[name=work_types]:checked'))].map(el => el.value).join(',');
+  const rec = {
+    intern_id: f.intern_id,
+    report_date: f.report_date,
+    work_types: types || null,
+    count_make: numOrNull(f.count_make),
+    count_post: numOrNull(f.count_post),
+    count_caption: numOrNull(f.count_caption),
+    memo: nn(f.memo)
+  };
+  if (id) await q(db.from('reports').update(rec).eq('id', id));
+  else await q(db.from('reports').insert(rec));
+  closeModal(); await reload(['reports']); toast('報告しました！');
+};
+
+ACT.delReport = async d => {
+  const r = S.reports.find(x => x.id === d.id), it = internOf(r.intern_id);
+  if (!await confirmDialog(`${it ? it.name : ''}さんの${fmtDate(r.report_date)}の報告を削除しますか？`)) return;
+  await q(db.from('reports').delete().eq('id', d.id));
+  closeModal(); await reload(['reports']); toast('削除しました');
 };
 
 async function boot() {
