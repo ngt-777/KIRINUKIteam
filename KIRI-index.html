@@ -1240,6 +1240,9 @@ SUB.setup = async f => {
 ============================================================ */
 const WORK_TYPES = ['切り抜き作業','投稿作業','入力作業（アプリ登録）','インサイト集計','情報修正','キャプション作成','その他'];
 const KIRI_CATS = ['渋スト','ASMR','希空ch'];
+// PostgreSQL は引用符なしで作成したカラム名の英大文字を小文字化する。
+// フォームの表示名 ASMR はそのままにし、DB の実カラム *_asmr を参照する。
+const reportColumn = (prefix, category) => `${prefix}_${category === 'ASMR' ? 'asmr' : category}`;
 const WORK_EXPAND = {'切り抜き作業':'kiriSection','投稿作業':'postSection','キャプション作成':'captionSection','その他':'otherSection'};
 
 function pageReport() {
@@ -1304,7 +1307,7 @@ function reportForm(id) {
   const hasKiri = selTypes.includes('切り抜き作業');
   const hasOther = selTypes.includes('その他');
   // カテゴリ別本数（kiri_渋スト, kiri_ASMR, kiri_希空ch）
-  const kiriVals = k => r['kiri_' + k] ?? '';
+  const kiriVals = k => r[reportColumn('kiri', k)] ?? '';
   return `<form data-submit="report" data-id="${id||''}">
     <div class="mh"><h2>${id ? '業務報告を編集' : '今日の業務報告'}</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
     <div class="fgrid">
@@ -1342,7 +1345,7 @@ function reportForm(id) {
           <div class="lab" style="margin-bottom:12px">📤 投稿本数（カテゴリ別）</div>
           <div class="fgrid">
             ${KIRI_CATS.map(c => `<div class="f"><label>${c}</label>
-              <input type="number" inputmode="numeric" name="post_${c}" value="${esc(r['post_'+c] ?? '')}" placeholder="0" min="0">
+              <input type="number" inputmode="numeric" name="post_${c}" value="${esc(r[reportColumn('post', c)] ?? '')}" placeholder="0" min="0">
             </div>`).join('')}
           </div>
         </div>
@@ -1355,7 +1358,7 @@ function reportForm(id) {
           <div class="sub" style="margin-bottom:10px;font-size:13px">切り抜き本数から自動入力・手修正可</div>
           <div class="fgrid">
             ${KIRI_CATS.map(c => `<div class="f"><label>${c}</label>
-              <input type="number" inputmode="numeric" name="caption_${c}" value="${esc(r['caption_'+c] ?? '')}" placeholder="0" min="0">
+              <input type="number" inputmode="numeric" name="caption_${c}" value="${esc(r[reportColumn('caption', c)] ?? '')}" placeholder="0" min="0">
             </div>`).join('')}
           </div>
         </div>
@@ -1391,19 +1394,19 @@ function reportDetailHtml(id) {
       ${(r.work_types||'').includes('切り抜き作業') ? `
       <div class="f full"><div class="lab">📹 切り抜き本数（カテゴリ別）</div>
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">
-          ${KIRI_CATS.map(c => `<div class="rnum"><b>${r['kiri_'+c] ?? 0}</b><small>${c}</small></div>`).join('')}
+          ${KIRI_CATS.map(c => `<div class="rnum"><b>${r[reportColumn('kiri', c)] ?? 0}</b><small>${c}</small></div>`).join('')}
           <div class="rnum" style="background:#E6E4F2"><b>${r.count_make ?? 0}</b><small>合計</small></div>
         </div>
       </div>` : ''}
       <div class="f full"><div class="lab">📤 投稿本数（カテゴリ別）</div>
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">
-          ${KIRI_CATS.map(c => `<div class="rnum"><b>${r['post_'+c] ?? 0}</b><small>${c}</small></div>`).join('')}
+          ${KIRI_CATS.map(c => `<div class="rnum"><b>${r[reportColumn('post', c)] ?? 0}</b><small>${c}</small></div>`).join('')}
           <div class="rnum" style="background:#E6E4F2"><b>${r.count_post ?? 0}</b><small>合計</small></div>
         </div>
       </div>
       <div class="f full"><div class="lab">✏️ キャプション作成本数（カテゴリ別）</div>
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">
-          ${KIRI_CATS.map(c => `<div class="rnum"><b>${r['caption_'+c] ?? 0}</b><small>${c}</small></div>`).join('')}
+          ${KIRI_CATS.map(c => `<div class="rnum"><b>${r[reportColumn('caption', c)] ?? 0}</b><small>${c}</small></div>`).join('')}
           <div class="rnum" style="background:#E6E4F2"><b>${r.count_caption ?? 0}</b><small>合計</small></div>
         </div>
       </div>
@@ -1462,14 +1465,14 @@ SUB.report = async (f, form) => {
   // カテゴリ別本数
   const kiriData = {}, postData = {}, captionData = {};
   KIRI_CATS.forEach(c => {
-    kiriData['kiri_' + c] = numOrNull(f['kiri_' + c]);
-    postData['post_' + c] = numOrNull(f['post_' + c]);
-    captionData['caption_' + c] = numOrNull(f['caption_' + c]);
+    kiriData[reportColumn('kiri', c)] = numOrNull(f['kiri_' + c]);
+    postData[reportColumn('post', c)] = numOrNull(f['post_' + c]);
+    captionData[reportColumn('caption', c)] = numOrNull(f['caption_' + c]);
   });
   // 各合計
-  const count_make    = KIRI_CATS.reduce((s,c) => s + (kiriData['kiri_'+c]    || 0), 0) || null;
-  const count_post    = KIRI_CATS.reduce((s,c) => s + (postData['post_'+c]    || 0), 0) || null;
-  const count_caption = KIRI_CATS.reduce((s,c) => s + (captionData['caption_'+c] || 0), 0) || null;
+  const count_make    = KIRI_CATS.reduce((s,c) => s + (kiriData[reportColumn('kiri', c)]    || 0), 0) || null;
+  const count_post    = KIRI_CATS.reduce((s,c) => s + (postData[reportColumn('post', c)]    || 0), 0) || null;
+  const count_caption = KIRI_CATS.reduce((s,c) => s + (captionData[reportColumn('caption', c)] || 0), 0) || null;
   const rec = {
     intern_id: f.intern_id,
     report_date: f.report_date,
