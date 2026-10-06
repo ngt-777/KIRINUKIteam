@@ -1239,6 +1239,7 @@ SUB.setup = async f => {
    ⑥ 業務報告
 ============================================================ */
 const WORK_TYPES = ['切り抜き作業','投稿作業','入力作業（アプリ登録）','インサイト集計','情報修正','キャプション作成','その他'];
+const KIRI_CATS = ['渋スト','ASMR','希空ch'];
 
 function pageReport() {
   const {rf = ''} = ui;
@@ -1299,6 +1300,10 @@ function reportForm(id) {
   if (!r) return '';
   const x = k => esc(r[k] ?? '');
   const selTypes = (r.work_types||'').split(',').filter(Boolean);
+  const hasKiri = selTypes.includes('切り抜き作業');
+  const hasOther = selTypes.includes('その他');
+  // カテゴリ別本数（kiri_渋スト, kiri_ASMR, kiri_希空ch）
+  const kiriVals = k => r['kiri_' + k] ?? '';
   return `<form data-submit="report" data-id="${id||''}">
     <div class="mh"><h2>${id ? '業務報告を編集' : '今日の業務報告'}</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
     <div class="fgrid">
@@ -1313,19 +1318,39 @@ function reportForm(id) {
       </div>
       <div class="fsec">今日やったこと</div>
       <div class="f full"><label>作業内容（複数選択可）</label>
-        <div class="segs">
-          ${WORK_TYPES.map(t => `<label class="seg"><input type="checkbox" name="work_types" value="${t}" ${selTypes.includes(t) ? 'checked' : ''}><span>${t}</span></label>`).join('')}
+        <div class="segs" id="workTypeSegs">
+          ${WORK_TYPES.map(t => `<label class="seg"><input type="checkbox" name="work_types" value="${t}" data-act="workTypeChk" ${selTypes.includes(t) ? 'checked' : ''}><span>${t}</span></label>`).join('')}
         </div>
       </div>
-      <div class="f"><label>切り抜き本数</label>
-        <input type="number" inputmode="numeric" name="count_make" value="${x('count_make')}" placeholder="0" min="0">
+
+      <!-- 切り抜き作業 → カテゴリ別本数 -->
+      <div class="f full" id="kiriSection" style="display:${hasKiri ? 'block' : 'none'}">
+        <div style="background:var(--field);border-radius:12px;padding:16px 18px">
+          <div class="lab" style="margin-bottom:12px">📹 切り抜き本数（カテゴリ別）</div>
+          <div class="fgrid">
+            ${KIRI_CATS.map(c => `<div class="f"><label>${c}</label>
+              <input type="number" inputmode="numeric" name="kiri_${c}" value="${esc(kiriVals(c))}" placeholder="0" min="0">
+            </div>`).join('')}
+          </div>
+        </div>
       </div>
+
+      <!-- 投稿本数 -->
       <div class="f"><label>投稿本数</label>
         <input type="number" inputmode="numeric" name="count_post" value="${x('count_post')}" placeholder="0" min="0">
       </div>
-      <div class="f full"><label>キャプション作成本数</label>
+
+      <!-- キャプション作成本数 -->
+      <div class="f"><label>キャプション作成本数</label>
         <input type="number" inputmode="numeric" name="count_caption" value="${x('count_caption')}" placeholder="0" min="0">
       </div>
+
+      <!-- その他 → 自由入力 -->
+      <div class="f full" id="otherSection" style="display:${hasOther ? 'block' : 'none'}">
+        <label>その他の作業内容（自由入力）</label>
+        <textarea name="other_detail" placeholder="具体的にどんな作業をしたか入力してください">${x('other_detail')}</textarea>
+      </div>
+
       <div class="f full"><label>ひとことメモ（任意）</label>
         <textarea name="memo" placeholder="今日気づいたこと、詰まったことなど自由に">${x('memo')}</textarea>
       </div>
@@ -1346,10 +1371,17 @@ function reportDetailHtml(id) {
       <b>${it ? esc(it.name) : '（削除済み）'}</b>　${r.report_date ? esc(dateLabel(r.report_date)) : ''}
     </div>
     <div class="fgrid">
-      <div class="f"><div class="lab">切り抜き本数</div><div class="dval">${r.count_make ?? 0} 本</div></div>
-      <div class="f"><div class="lab">投稿本数</div><div class="dval">${r.count_post ?? 0} 本</div></div>
-      <div class="f full"><div class="lab">キャプション作成本数</div><div class="dval">${r.count_caption ?? 0} 本</div></div>
       <div class="f full"><div class="lab">作業内容</div><div class="dval">${tags || '（未選択）'}</div></div>
+      ${(r.work_types||'').includes('切り抜き作業') ? `
+      <div class="f full"><div class="lab">📹 切り抜き本数（カテゴリ別）</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">
+          ${KIRI_CATS.map(c => `<div class="rnum"><b>${r['kiri_'+c] ?? 0}</b><small>${c}</small></div>`).join('')}
+          <div class="rnum" style="background:#E6E4F2"><b>${r.count_make ?? 0}</b><small>合計</small></div>
+        </div>
+      </div>` : ''}
+      <div class="f"><div class="lab">投稿本数</div><div class="dval">${r.count_post ?? 0} 本</div></div>
+      <div class="f"><div class="lab">キャプション作成本数</div><div class="dval">${r.count_caption ?? 0} 本</div></div>
+      ${r.other_detail ? `<div class="f full"><div class="lab">その他の作業内容</div><div class="dval">${esc(r.other_detail)}</div></div>` : ''}
       <div class="f full"><div class="lab">ひとことメモ</div><div class="dval">${r.memo ? esc(r.memo) : '（なし）'}</div></div>
     </div>
     <div class="mf end">
@@ -1358,6 +1390,14 @@ function reportDetailHtml(id) {
     </div>`;
 }
 
+ACT.workTypeChk = (d, el) => {
+  const form = el.closest('form');
+  const kiri = form.querySelector('#kiriSection');
+  const other = form.querySelector('#otherSection');
+  const checked = [...form.querySelectorAll('input[name=work_types]:checked')].map(e => e.value);
+  if (kiri) kiri.style.display = checked.includes('切り抜き作業') ? 'block' : 'none';
+  if (other) other.style.display = checked.includes('その他') ? 'block' : 'none';
+};
 ACT.newReport = () => {
   if (!S.interns.length) { toast('先にインターンを登録してください（稼働カレンダー→インターン管理）', true); return; }
   openModal(() => reportForm(null));
@@ -1368,15 +1408,22 @@ ACT.viewReport = d => openModal(() => reportDetailHtml(d.id));
 SUB.report = async (f, form) => {
   const id = form.dataset.id;
   if (!f.intern_id || !f.report_date) return toast('名前と日付は必須です', true);
-  const types = [...(form.querySelectorAll('input[name=work_types]:checked'))].map(el => el.value).join(',');
+  const types = [...form.querySelectorAll('input[name=work_types]:checked')].map(el => el.value).join(',');
+  // カテゴリ別本数
+  const kiriData = {};
+  KIRI_CATS.forEach(c => { kiriData['kiri_' + c] = numOrNull(f['kiri_' + c]); });
+  // 切り抜き合計
+  const count_make = KIRI_CATS.reduce((s,c) => s + (kiriData['kiri_'+c] || 0), 0) || null;
   const rec = {
     intern_id: f.intern_id,
     report_date: f.report_date,
     work_types: types || null,
-    count_make: numOrNull(f.count_make),
+    count_make,
     count_post: numOrNull(f.count_post),
     count_caption: numOrNull(f.count_caption),
-    memo: nn(f.memo)
+    other_detail: nn(f.other_detail),
+    memo: nn(f.memo),
+    ...kiriData
   };
   if (id) await q(db.from('reports').update(rec).eq('id', id));
   else await q(db.from('reports').insert(rec));
