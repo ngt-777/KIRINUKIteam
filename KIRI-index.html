@@ -1335,14 +1335,29 @@ function reportForm(id) {
         </div>
       </div>
 
-      <!-- 投稿本数 -->
-      <div class="f"><label>投稿本数</label>
-        <input type="number" inputmode="numeric" name="count_post" value="${x('count_post')}" placeholder="0" min="0">
+      <!-- 投稿本数 カテゴリ別 -->
+      <div class="f full">
+        <div style="background:var(--field);border-radius:12px;padding:16px 18px">
+          <div class="lab" style="margin-bottom:12px">📤 投稿本数（カテゴリ別）</div>
+          <div class="fgrid">
+            ${KIRI_CATS.map(c => `<div class="f"><label>${c}</label>
+              <input type="number" inputmode="numeric" name="post_${c}" id="post_${c.replace(/[^\w]/g,'_')}" value="${esc(r['post_'+c] ?? '')}" placeholder="0" min="0" data-act="catCountChange" data-group="post">
+            </div>`).join('')}
+          </div>
+        </div>
       </div>
 
-      <!-- キャプション作成本数 -->
-      <div class="f"><label>キャプション作成本数</label>
-        <input type="number" inputmode="numeric" name="count_caption" value="${x('count_caption')}" placeholder="0" min="0">
+      <!-- キャプション作成本数 カテゴリ別 -->
+      <div class="f full">
+        <div style="background:var(--field);border-radius:12px;padding:16px 18px">
+          <div class="lab" style="margin-bottom:4px">✏️ キャプション作成本数（カテゴリ別）</div>
+          <div class="sub" style="margin-bottom:10px;font-size:13px">切り抜き本数から自動入力・手修正可</div>
+          <div class="fgrid">
+            ${KIRI_CATS.map(c => `<div class="f"><label>${c}</label>
+              <input type="number" inputmode="numeric" name="caption_${c}" id="caption_${c.replace(/[^\w]/g,'_')}" value="${esc(r['caption_'+c] ?? '')}" placeholder="0" min="0">
+            </div>`).join('')}
+          </div>
+        </div>
       </div>
 
       <!-- その他 → 自由入力 -->
@@ -1379,8 +1394,18 @@ function reportDetailHtml(id) {
           <div class="rnum" style="background:#E6E4F2"><b>${r.count_make ?? 0}</b><small>合計</small></div>
         </div>
       </div>` : ''}
-      <div class="f"><div class="lab">投稿本数</div><div class="dval">${r.count_post ?? 0} 本</div></div>
-      <div class="f"><div class="lab">キャプション作成本数</div><div class="dval">${r.count_caption ?? 0} 本</div></div>
+      <div class="f full"><div class="lab">📤 投稿本数（カテゴリ別）</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">
+          ${KIRI_CATS.map(c => `<div class="rnum"><b>${r['post_'+c] ?? 0}</b><small>${c}</small></div>`).join('')}
+          <div class="rnum" style="background:#E6E4F2"><b>${r.count_post ?? 0}</b><small>合計</small></div>
+        </div>
+      </div>
+      <div class="f full"><div class="lab">✏️ キャプション作成本数（カテゴリ別）</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">
+          ${KIRI_CATS.map(c => `<div class="rnum"><b>${r['caption_'+c] ?? 0}</b><small>${c}</small></div>`).join('')}
+          <div class="rnum" style="background:#E6E4F2"><b>${r.count_caption ?? 0}</b><small>合計</small></div>
+        </div>
+      </div>
       ${r.other_detail ? `<div class="f full"><div class="lab">その他の作業内容</div><div class="dval">${esc(r.other_detail)}</div></div>` : ''}
       <div class="f full"><div class="lab">ひとことメモ</div><div class="dval">${r.memo ? esc(r.memo) : '（なし）'}</div></div>
     </div>
@@ -1398,6 +1423,30 @@ ACT.workTypeChk = (d, el) => {
   if (kiri) kiri.style.display = checked.includes('切り抜き作業') ? 'block' : 'none';
   if (other) other.style.display = checked.includes('その他') ? 'block' : 'none';
 };
+// 切り抜き本数入力 → キャプション欄へ自動コピー（未入力のときだけ）
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (!t.name || !t.name.startsWith('kiri_')) return;
+  const cat = t.name.slice(5); // 例: 渋スト
+  const form = t.closest('form'); if (!form) return;
+  const capEl = form.querySelector(`input[name="caption_${cat}"]`);
+  // キャプション欄が空か、前回の切り抜き値と同じなら上書き
+  if (capEl && (capEl.value === '' || capEl.dataset.autoFilled === 'true')) {
+    capEl.value = t.value;
+    capEl.dataset.autoFilled = 'true';
+  }
+});
+// キャプション欄を手入力したら自動フィルフラグを外す
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (!t.name || !t.name.startsWith('caption_')) return;
+  const form = t.closest('form'); if (!form) return;
+  // 対応するkirinuki値と違ったら手入力とみなす
+  const cat = t.name.slice(8);
+  const kiriEl = form.querySelector(`input[name="kiri_${cat}"]`);
+  if (kiriEl && t.value !== kiriEl.value) t.dataset.autoFilled = 'false';
+  else t.dataset.autoFilled = 'true';
+});
 ACT.newReport = () => {
   if (!S.interns.length) { toast('先にインターンを登録してください（稼働カレンダー→インターン管理）', true); return; }
   openModal(() => reportForm(null));
@@ -1410,20 +1459,26 @@ SUB.report = async (f, form) => {
   if (!f.intern_id || !f.report_date) return toast('名前と日付は必須です', true);
   const types = [...form.querySelectorAll('input[name=work_types]:checked')].map(el => el.value).join(',');
   // カテゴリ別本数
-  const kiriData = {};
-  KIRI_CATS.forEach(c => { kiriData['kiri_' + c] = numOrNull(f['kiri_' + c]); });
-  // 切り抜き合計
-  const count_make = KIRI_CATS.reduce((s,c) => s + (kiriData['kiri_'+c] || 0), 0) || null;
+  const kiriData = {}, postData = {}, captionData = {};
+  KIRI_CATS.forEach(c => {
+    kiriData['kiri_' + c] = numOrNull(f['kiri_' + c]);
+    postData['post_' + c] = numOrNull(f['post_' + c]);
+    captionData['caption_' + c] = numOrNull(f['caption_' + c]);
+  });
+  // 各合計
+  const count_make    = KIRI_CATS.reduce((s,c) => s + (kiriData['kiri_'+c]    || 0), 0) || null;
+  const count_post    = KIRI_CATS.reduce((s,c) => s + (postData['post_'+c]    || 0), 0) || null;
+  const count_caption = KIRI_CATS.reduce((s,c) => s + (captionData['caption_'+c] || 0), 0) || null;
   const rec = {
     intern_id: f.intern_id,
     report_date: f.report_date,
     work_types: types || null,
     count_make,
-    count_post: numOrNull(f.count_post),
-    count_caption: numOrNull(f.count_caption),
+    count_post,
+    count_caption,
     other_detail: nn(f.other_detail),
     memo: nn(f.memo),
-    ...kiriData
+    ...kiriData, ...postData, ...captionData
   };
   if (id) await q(db.from('reports').update(rec).eq('id', id));
   else await q(db.from('reports').insert(rec));
