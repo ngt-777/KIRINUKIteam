@@ -209,6 +209,18 @@ h1,h2,h3{margin:0}
 .report-progress-track{height:12px;border-radius:12px;background:#ECEAF4;overflow:hidden;margin-top:12px}
 .report-progress-fill{height:100%;background:var(--accent);border-radius:12px}
 .report-goal-edit{border-top:1px solid #E6E4F2;margin-top:16px;padding-top:14px}
+.report-goal-edit summary,.report-breakdown summary{cursor:pointer;color:var(--accent);font-weight:700;min-height:35px;list-style:revert}
+.report-goal-edit form{margin-top:14px}
+.report-goal-edit form>.btn{margin-top:14px}
+.report-breakdown{margin-top:10px;font-size:14px}
+.report-breakdown ul{list-style:none;margin:4px 0 0;padding:0}
+.report-breakdown li{padding:4px 0;border-bottom:1px solid #F1F0F5}
+.goal-editor-group{border:1px solid #E6E4F2;border-radius:10px;padding:14px;min-width:0}
+.goal-editor-group>b{display:block;margin-bottom:12px}
+.goal-editor-group .work-count-row input{width:100%;min-height:42px}
+.goal-editor-group .sub{margin:8px 0;line-height:1.5}
+.goal-editor-group .sub input{width:auto;min-height:0}
+.goal-editor-total{border-top:1px solid #E6E4F2;padding-top:10px;margin-top:4px}
 .report-goal-fields{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
 .report-goal-fields label{display:flex;flex-direction:column;gap:5px;flex:1;min-width:140px;font-weight:700}
 .report-goal-fields input{width:100%;min-height:44px;border:1px solid #C8C5D6;border-radius:8px;padding:8px}
@@ -385,7 +397,7 @@ ALTER TABLE link_cats DISABLE ROW LEVEL SECURITY;`;
    状態
 ============================================================ */
 let db = null;
-const S = {accounts:[], videos:[], insights:[], interns:[], schedules:[], links:[], link_cats:[], reports:[], report_goals:[]};
+const S = {accounts:[], videos:[], insights:[], interns:[], schedules:[], links:[], link_cats:[], reports:[], report_goals:[], report_goal_categories:[]};
 const now0 = new Date();
 const ui = {
   page: 'accounts',
@@ -436,7 +448,7 @@ async function copyText(t) {
 /* ============================================================
    Supabase
 ============================================================ */
-const ORDER = {accounts:'sort_order', interns:'sort_order', links:'sort_order', link_cats:'sort_order', videos:'created_at', insights:'created_at', schedules:'work_date', reports:'report_date', report_goals:'month'};
+const ORDER = {accounts:'sort_order', interns:'sort_order', links:'sort_order', link_cats:'sort_order', videos:'created_at', insights:'created_at', schedules:'work_date', reports:'report_date', report_goals:'month', report_goal_categories:'month'};
 async function load(tbl) {
   const {data, error} = await db.from(tbl).select('*').order(ORDER[tbl], {ascending: true});
   if (error) throw error;
@@ -1297,19 +1309,52 @@ function reportWorkLines(r) {
       const hasCategories = values.some(v => v.value != null);
       const hasTotal = totalKey && r[totalKey] != null;
       const total = hasCategories ? values.reduce((n,v) => n + (Number(v.value) || 0), 0) : r[totalKey];
-      const detail = values.filter(v => Number(v.value) > 0).map(v => `<li>└ ${esc(v.name)}：${esc(v.value)}${unit}</li>`).join('');
-      return `<li>・${esc(type)}${hasCategories || hasTotal ? `：${esc(total)}${unit}` : ''}${detail ? `<ul class="rm-breakdown">${detail}</ul>` : ''}</li>`;
+      const detailItems = values.filter(v => Number(v.value) > 0);
+      const detail = detailItems.map(v => `<li>└ ${esc(v.name)}：${esc(v.value)}${unit}</li>`).join('');
+      const heading = detailItems.length > 1 ? `：合計${esc(total)}${unit}` :
+        detailItems.length === 0 && hasTotal && Number(total) > 0 ? `：${esc(total)}${unit}` : '';
+      return `<li>・${esc(type)}${heading}${detail ? `<ul class="rm-breakdown">${detail}</ul>` : ''}</li>`;
     }
     return `<li>・${esc(type)}${type === 'その他' && r.other_detail ? `：${esc(r.other_detail)}` : ''}</li>`;
   }).join('');
 }
-function reportProgress(label, actual, target) {
+const displayStaffName = it => it ? `${it.name.trim()}${it.name.trim().endsWith('さん') ? '' : 'さん'}` : '（削除済み）';
+const reportTimeLabel = r => r.start_time || r.end_time ?
+  `　${esc((r.start_time || '—').slice(0,5))}〜${esc((r.end_time || '—').slice(0,5))}` : '';
+const categoryGoals = (month, metric) => S.report_goal_categories.filter(g => g.month === month && g.metric === metric);
+function monthGoal(month, metric) {
+  const rows = categoryGoals(month, metric);
+  if (rows.length) return rows.some(g => g.target != null) ? rows.reduce((sum,g) => sum + (Number(g.target) || 0), 0) : null;
+  return S.report_goals.find(g => g.month === month && g.metric === metric)?.target ?? null;
+}
+function reportProgress(label, actual, target, month, metric, monthRows) {
   const valid = Number.isFinite(Number(target)) && Number(target) > 0;
   const rate = valid ? Math.round(actual / Number(target) * 100) : null;
   const width = valid ? Math.min(rate, 100) : 0;
+  const prefix = metric === 'make' ? 'kiri' : 'post';
+  const catRows = categoryGoals(month, metric);
+  const detail = KIRI_CATS.map(c => {
+    const count = monthRows.reduce((sum,r) => sum + (Number(r[reportColumn(prefix,c)]) || 0), 0);
+    const goal = catRows.find(g => g.category === c)?.target;
+    const hasGoal = Number(goal) > 0;
+    const pct = hasGoal ? `　${Math.round(count / Number(goal) * 100)}%` : '';
+    return `<li>${esc(c)}　${count} / ${hasGoal ? `${goal}本` : '目標未設定'}${pct}</li>`;
+  }).join('');
   return `<div class="report-goal"><b>${label}</b>
     <div>${actual}本 / 目標 ${valid ? `${target}本` : '未設定'}　${valid ? `達成率 ${rate}%` : ''}</div>
     <div class="report-progress-track" role="progressbar" aria-label="${label}の達成率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${width}" aria-valuetext="${valid ? `${rate}%` : '目標未設定'}"><div class="report-progress-fill" style="width:${width}%"></div></div>
+    <details class="report-breakdown"><summary>カテゴリ別の進捗を見る</summary><ul>${detail}</ul></details>
+  </div>`;
+}
+function goalEditorGroup(month, metric, label) {
+  const rows = categoryGoals(month, metric);
+  const initial = rows.some(g => g.target != null) ? rows.reduce((n,g) => n + (Number(g.target) || 0),0) : null;
+  const legacy = rows.length ? '' : S.report_goals.find(g => g.month === month && g.metric === metric)?.target;
+  return `<div class="goal-editor-group"><b>${label}</b>
+    ${legacy ? `<p class="sub">以前の合計目標：${legacy}本。カテゴリ別に保存すると切り替わります。</p>` : ''}
+    ${KIRI_CATS.map(c => `<label class="work-count-row"><span>${esc(c)}</span><input type="number" inputmode="numeric" min="1" step="1" name="${metric}_${c}" value="${esc(rows.find(g => g.category === c)?.target ?? '')}" placeholder="未設定"><span>本</span></label>`).join('')}
+    <div class="goal-editor-total">合計目標：<strong data-goal-total="${metric}">${initial == null ? '未設定' : `${initial}本`}</strong></div>
+    ${legacy ? `<label class="sub"><input type="checkbox" name="clear_${metric}"> 以前の合計目標を未設定にする（カテゴリ欄が空のときのみ）</label>` : ''}
   </div>`;
 }
 function pageReport() {
@@ -1323,7 +1368,7 @@ function pageReport() {
   const totalPost = monthRows.reduce((s,r) => s + (r.count_post || 0), 0);
   const totalCaption = monthRows.reduce((s,r) => s + (r.count_caption || 0), 0);
   const totalThumb = monthRows.reduce((s,r) => s + KIRI_CATS.reduce((n,c) => n + (r[reportColumn('thumb', c)] || 0), 0), 0);
-  const goal = metric => S.report_goals.find(g => g.month === ym && g.metric === metric)?.target ?? null;
+  const goal = metric => monthGoal(ym, metric);
   const [year, month] = ym.split('-');
   const label = `${year}年${Number(month)}月`;
   const chipsF = `<div class="fchips" style="margin-bottom:16px">
@@ -1333,9 +1378,10 @@ function pageReport() {
   const rows = filtered.length ? filtered.map(r => {
     const it = internOf(r.intern_id);
     const d = r.report_date ? parseD(r.report_date) : null;
-    return `<div class="rcard" role="button" tabindex="0" aria-label="${esc(r.report_date || '')} ${esc(it ? it.name : '（削除済み）')}の業務報告の詳細" data-act="viewReport" data-id="${r.id}">
-      <div class="rdate">${d ? `${d.getMonth()+1}月${d.getDate()}日（${WD[d.getDay()]}）` : '日付未設定'}</div>
-      <div class="rbody"><div class="rname"><i class="dot" style="background:${esc(it ? it.color : '#888')}"></i>${esc(it ? it.name : '（削除済み）')}さん</div>
+    const displayName = displayStaffName(it);
+    return `<div class="rcard" role="button" tabindex="0" aria-label="${esc(r.report_date || '')} ${esc(displayName)}の業務報告の詳細" data-act="viewReport" data-id="${r.id}">
+      <div class="rdate">${d ? `${d.getMonth()+1}月${d.getDate()}日（${WD[d.getDay()]}）` : '日付未設定'}${reportTimeLabel(r)}</div>
+      <div class="rbody"><div class="rname"><i class="dot" style="background:${esc(it ? it.color : '#888')}"></i>${esc(displayName)}</div>
         <ul class="rm-work">${reportWorkLines(r)}</ul>
         ${r.memo ? `<div class="rmemo">メモ：${esc(r.memo)}</div>` : ''}
       </div>
@@ -1345,13 +1391,14 @@ function pageReport() {
     <section class="report-section" aria-label="月間目標と達成状況">
       <div class="report-month"><button type="button" data-act="reportMonth" data-delta="-1" aria-label="前月">◀</button><strong>${label}</strong><button type="button" data-act="reportMonth" data-delta="1" aria-label="翌月">▶</button></div>
       <h2>${label}の進捗（全員）</h2>
-      <div class="report-goals">${reportProgress('切り抜き作成', totalMake, goal('make'))}${reportProgress('投稿', totalPost, goal('post'))}</div>
-      <form class="report-goal-edit" data-submit="reportGoals" data-month="${ym}">
-        <div class="lab" style="margin-bottom:8px">${label}の目標設定（空欄は未設定）</div>
-        <div class="report-goal-fields"><label>切り抜き作成 目標本数<input type="number" inputmode="numeric" name="make" min="1" step="1" value="${esc(goal('make') ?? '')}" placeholder="目標本数"></label>
-        <label>投稿 目標本数<input type="number" inputmode="numeric" name="post" min="1" step="1" value="${esc(goal('post') ?? '')}" placeholder="目標本数"></label>
-        <button type="submit" class="btn pri">目標を保存</button></div>
-      </form>
+      <div class="report-goals">${reportProgress('切り抜き作成', totalMake, goal('make'), ym, 'make', monthRows)}${reportProgress('投稿', totalPost, goal('post'), ym, 'post', monthRows)}</div>
+      <details class="report-goal-edit"><summary>目標を設定・確認</summary>
+        <form data-submit="reportGoals" data-month="${ym}">
+          <p class="sub">空欄はそのカテゴリの目標未設定です。以前の目標と業務報告は削除しません。</p>
+          <div class="report-goals">${goalEditorGroup(ym, 'make', '切り抜き作成')}${goalEditorGroup(ym, 'post', '投稿')}</div>
+          <button type="submit" class="btn pri">目標を保存</button>
+        </form>
+      </details>
     </section>
     <section class="report-section"><h2>${label}の実績（全員）</h2><dl class="report-summary">
       <div><dt>キャプション作成</dt><dd>${totalCaption}本</dd></div><div><dt>サムネイル作成</dt><dd>${totalThumb}枚</dd></div><div><dt>報告件数</dt><dd>${monthRows.length}件</dd></div>
@@ -1369,15 +1416,21 @@ ACT.repF = d => { ui.rf = d.id; renderPage(); };
 SUB.reportGoals = async (f, form) => {
   const month = form.dataset.month;
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('対象月が正しくありません');
-  const rows = ['make', 'post'].map(metric => {
-    const raw = (f[metric] || '').trim();
-    const target = raw === '' ? null : Number(raw);
-    if (target !== null && (!Number.isSafeInteger(target) || target <= 0)) throw new Error('目標本数は1以上の整数で入力してください');
-    return {month, metric, target};
+  const rows = ['make', 'post'].flatMap(metric => {
+    const hasLegacyOnly = !categoryGoals(month, metric).length && S.report_goals.some(g => g.month === month && g.metric === metric && g.target != null);
+    const values = KIRI_CATS.map(category => ({category, raw: (f[`${metric}_${category}`] || '').trim()}));
+    // 未入力の旧合計目標はそのまま残す。入力済みのカテゴリだけ新方式に切り替える。
+    if (hasLegacyOnly && values.every(v => v.raw === '') && !f[`clear_${metric}`]) return [];
+    return values.map(({category, raw}) => {
+      const target = raw === '' ? null : Number(raw);
+      if (target !== null && (!Number.isSafeInteger(target) || target <= 0)) throw new Error('目標本数は1以上の整数で入力してください');
+      return {month, metric, category, target};
+    });
   });
-  await q(db.from('report_goals').upsert(rows, {onConflict:'month,metric'}));
-  await reload(['report_goals']);
-  toast('月間目標を保存しました');
+  if (!rows.length) return toast('カテゴリ別の目標を入力してください', true);
+  await q(db.from('report_goal_categories').upsert(rows, {onConflict:'month,metric,category'}));
+  await reload(['report_goal_categories']);
+  toast('カテゴリ別の月間目標を保存しました');
 };
 
 function reportCountFields(r, prefix, unit) {
@@ -1411,6 +1464,8 @@ function reportForm(id) {
       <div class="f full"><label>日付 <span style="color:var(--accent)">*</span></label>
         <input type="date" name="report_date" value="${x('report_date')}" required>
       </div>
+      <div class="f"><label>開始時間（任意）</label><input type="time" name="start_time" value="${esc((r.start_time || '').slice(0,5))}"></div>
+      <div class="f"><label>終了時間（任意）</label><input type="time" name="end_time" value="${esc((r.end_time || '').slice(0,5))}"></div>
       <div class="fsec">今日やったこと</div>
       <div class="work-list" role="group" aria-label="作業内容（複数選択可）">
         ${WORK_TYPES.map(t => `<div class="work-card${selTypes.includes(t) ? ' open' : ''}">
@@ -1436,7 +1491,7 @@ function reportDetailHtml(id) {
   const tags = (r.work_types||'').split(',').filter(Boolean).map(t => `<span class="work-tag">${esc(t)}</span>`).join('');
   return `<div class="mh"><h2>業務報告の詳細</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
     <div class="vinfo">
-      <b>${it ? esc(it.name) : '（削除済み）'}</b>　${r.report_date ? esc(dateLabel(r.report_date)) : ''}
+      <b>${esc(displayStaffName(it))}</b>　${r.report_date ? esc(dateLabel(r.report_date)) : ''}${reportTimeLabel(r)}
     </div>
     <div class="fgrid">
       <div class="f full"><div class="lab">作業内容</div><div class="dval">${tags || '（未選択）'}</div></div>
@@ -1502,6 +1557,16 @@ document.addEventListener('input', e => {
   if (kiriEl && t.value !== kiriEl.value) t.dataset.autoFilled = 'false';
   else t.dataset.autoFilled = 'true';
 });
+// 目標入力中も合計を即時反映する（保存はボタン押下時のみ）
+document.addEventListener('input', e => {
+  const t = e.target;
+  const form = t.closest?.('form[data-submit="reportGoals"]');
+  if (!form || !/^(make|post)_/.test(t.name || '')) return;
+  const metric = t.name.split('_')[0];
+  const values = KIRI_CATS.map(c => form.elements.namedItem(`${metric}_${c}`)?.value ?? '');
+  const total = form.querySelector(`[data-goal-total="${metric}"]`);
+  if (total) total.textContent = values.some(v => v !== '') ? `${values.reduce((sum,v) => sum + (Number(v) || 0),0)}本` : '未設定';
+});
 ACT.newReport = () => {
   if (!S.interns.length) { toast('先にインターンを登録してください（稼働カレンダー→インターン管理）', true); return; }
   openModal(() => reportForm(null));
@@ -1529,6 +1594,8 @@ SUB.report = async (f, form) => {
   const rec = {
     intern_id: f.intern_id,
     report_date: f.report_date,
+    start_time: nn(f.start_time),
+    end_time: nn(f.end_time),
     work_types: types || null,
     count_make,
     count_post,
@@ -1544,7 +1611,7 @@ SUB.report = async (f, form) => {
 
 ACT.delReport = async d => {
   const r = S.reports.find(x => x.id === d.id), it = internOf(r.intern_id);
-  if (!await confirmDialog(`${it ? it.name : ''}さんの${fmtDate(r.report_date)}の報告を削除しますか？`)) return;
+  if (!await confirmDialog(`${displayStaffName(it)}の${fmtDate(r.report_date)}の報告を削除しますか？`)) return;
   await q(db.from('reports').delete().eq('id', d.id));
   closeModal(); await reload(['reports']); toast('削除しました');
 };
