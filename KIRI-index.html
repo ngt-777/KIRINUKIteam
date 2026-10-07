@@ -184,23 +184,39 @@ h1,h2,h3{margin:0}
 .dlink{color:var(--accent);font-weight:700;text-decoration:none;word-break:break-all}
 .dlink:hover{text-decoration:underline}
 
-.rcard{background:#fff;border-radius:14px;padding:20px 22px;margin-bottom:12px;display:flex;gap:18px;align-items:flex-start;cursor:pointer;transition:transform .1s}
-.rcard:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(20,18,40,.08)}
-.rcard-left{display:flex;flex-direction:column;align-items:center;gap:6px;flex:none;width:64px}
-.rdate{font-size:13px;font-weight:700;text-align:center;color:var(--sub)}
-.rdate b{display:block;font-size:22px;font-weight:900;color:var(--ink);line-height:1}
-.rbody{flex:1;min-width:0}
-.rname{display:inline-flex;align-items:center;gap:6px;font-weight:700;margin-bottom:6px}
-.rsummary{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.rcard{background:#fff;border-bottom:1px solid #E6E4F2;padding:16px 20px;cursor:pointer}
+.rcard:hover,.rcard:focus-visible{background:#F8F7FC;outline:2px solid var(--accent);outline-offset:-2px}
+.rdate{font-size:14px;font-weight:800;color:var(--sub);margin-bottom:7px}
+.rname{display:flex;align-items:center;gap:8px;font-weight:800;margin-bottom:8px}
+.rbody{min-width:0}
 .rnum{display:flex;flex-direction:column;align-items:center;background:var(--field);border-radius:10px;padding:8px 14px;min-width:64px}
 .rnum b{font-size:22px;font-weight:900;line-height:1}
 .rnum small{font-size:12px;font-weight:700;color:var(--sub);margin-top:2px}
-.rmemo{font-size:14.5px;color:var(--sub);white-space:pre-wrap;word-break:break-word}
-.rtotal{display:flex;gap:16px;flex-wrap:wrap;background:#fff;border-radius:14px;padding:18px 22px;margin-bottom:20px}
-.rtotal-item{display:flex;flex-direction:column;align-items:center}
-.rtotal-item b{font-size:28px;font-weight:900;line-height:1}
-.rtotal-item small{font-size:13px;font-weight:700;color:var(--sub);margin-top:4px}
-.rtotal-sep{width:1px;background:#E6E4F2;align-self:stretch}
+.rm-work{list-style:none;padding:0;margin:0}
+.rm-work>li{padding:3px 0;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.rm-breakdown{list-style:none;padding:0 0 0 20px;margin:2px 0 4px;color:var(--sub)}
+.rm-breakdown li{padding:1px 0}
+.rmemo{font-size:13px;color:var(--sub);white-space:pre-wrap;overflow-wrap:anywhere;margin-top:8px}
+.report-section{background:#fff;border-radius:14px;padding:20px;margin-bottom:18px}
+.report-section h2{font-size:18px;margin:0 0 14px}
+.report-month{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.report-month strong{font-size:18px;min-width:125px;text-align:center}
+.report-month button{width:40px;height:40px;border:1px solid #DCD9E9;border-radius:10px;background:#fff;cursor:pointer}
+.report-month button:hover{background:var(--field)}
+.report-goals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.report-goal{border:1px solid #E6E4F2;border-radius:10px;padding:15px;min-width:0}
+.report-goal b{display:block;margin-bottom:8px}
+.report-progress-track{height:12px;border-radius:12px;background:#ECEAF4;overflow:hidden;margin-top:12px}
+.report-progress-fill{height:100%;background:var(--accent);border-radius:12px}
+.report-goal-edit{border-top:1px solid #E6E4F2;margin-top:16px;padding-top:14px}
+.report-goal-fields{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
+.report-goal-fields label{display:flex;flex-direction:column;gap:5px;flex:1;min-width:140px;font-weight:700}
+.report-goal-fields input{width:100%;min-height:44px;border:1px solid #C8C5D6;border-radius:8px;padding:8px}
+.report-summary{display:flex;gap:22px;flex-wrap:wrap;margin:0}
+.report-summary div{display:flex;gap:5px;align-items:baseline}
+.report-summary dt{color:var(--sub)}
+.report-summary dd{margin:0;font-weight:800}
+@media(max-width:600px){.report-goals{grid-template-columns:1fr}.report-section{padding:16px}.rcard{padding:14px}}
 .work-tags{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 .work-tag{display:inline-flex;align-items:center;gap:5px;background:var(--field);border-radius:999px;padding:4px 12px;font-size:13.5px;font-weight:700}
 .work-list{grid-column:1/-1;display:flex;flex-direction:column;gap:10px}
@@ -369,7 +385,7 @@ ALTER TABLE link_cats DISABLE ROW LEVEL SECURITY;`;
    状態
 ============================================================ */
 let db = null;
-const S = {accounts:[], videos:[], insights:[], interns:[], schedules:[], links:[], link_cats:[], reports:[]};
+const S = {accounts:[], videos:[], insights:[], interns:[], schedules:[], links:[], link_cats:[], reports:[], report_goals:[]};
 const now0 = new Date();
 const ui = {
   page: 'accounts',
@@ -420,7 +436,7 @@ async function copyText(t) {
 /* ============================================================
    Supabase
 ============================================================ */
-const ORDER = {accounts:'sort_order', interns:'sort_order', links:'sort_order', link_cats:'sort_order', videos:'created_at', insights:'created_at', schedules:'work_date', reports:'report_date'};
+const ORDER = {accounts:'sort_order', interns:'sort_order', links:'sort_order', link_cats:'sort_order', videos:'created_at', insights:'created_at', schedules:'work_date', reports:'report_date', report_goals:'month'};
 async function load(tbl) {
   const {data, error} = await db.from(tbl).select('*').order(ORDER[tbl], {ascending: true});
   if (error) throw error;
@@ -1258,63 +1274,111 @@ const KIRI_CATS = ['渋スト','ASMR','希空ch'];
 // フォームの表示名 ASMR はそのままにし、DB の実カラム *_asmr を参照する。
 const reportColumn = (prefix, category) => `${prefix}_${category === 'ASMR' ? 'asmr' : category}`;
 
+// 作業と内訳は同じ行のまとまりにし、旧報告で合計だけ残る場合も表示する。
+function reportWorkLines(r) {
+  const stored = (r.work_types || '').split(',').filter(Boolean);
+  const counts = {
+    '切り抜き作業': ['kiri', 'count_make', '本'],
+    '投稿作業': ['post', 'count_post', '本'],
+    'キャプション作成': ['caption', 'count_caption', '本'],
+    'サムネイル作成': ['thumb', null, '枚']
+  };
+  const types = [...new Set([...WORK_TYPES.filter(t => stored.includes(t)), ...stored.filter(t => !WORK_TYPES.includes(t))])];
+  Object.entries(counts).forEach(([type, [prefix, totalKey]]) => {
+    if (!types.includes(type) && (KIRI_CATS.some(c => r[reportColumn(prefix,c)] != null) || (totalKey && r[totalKey] != null))) types.push(type);
+  });
+  if (r.other_detail && !types.includes('その他')) types.push('その他');
+  if (!types.length) return '<li>・作業内容の記録なし</li>';
+  return types.map(type => {
+    const spec = counts[type];
+    if (spec) {
+      const [prefix, totalKey, unit] = spec;
+      const values = KIRI_CATS.map(c => ({name:c, value:r[reportColumn(prefix,c)]}));
+      const hasCategories = values.some(v => v.value != null);
+      const hasTotal = totalKey && r[totalKey] != null;
+      const total = hasCategories ? values.reduce((n,v) => n + (Number(v.value) || 0), 0) : r[totalKey];
+      const detail = values.filter(v => Number(v.value) > 0).map(v => `<li>└ ${esc(v.name)}：${esc(v.value)}${unit}</li>`).join('');
+      return `<li>・${esc(type)}${hasCategories || hasTotal ? `：${esc(total)}${unit}` : ''}${detail ? `<ul class="rm-breakdown">${detail}</ul>` : ''}</li>`;
+    }
+    return `<li>・${esc(type)}${type === 'その他' && r.other_detail ? `：${esc(r.other_detail)}` : ''}</li>`;
+  }).join('');
+}
+function reportProgress(label, actual, target) {
+  const valid = Number.isFinite(Number(target)) && Number(target) > 0;
+  const rate = valid ? Math.round(actual / Number(target) * 100) : null;
+  const width = valid ? Math.min(rate, 100) : 0;
+  return `<div class="report-goal"><b>${label}</b>
+    <div>${actual}本 / 目標 ${valid ? `${target}本` : '未設定'}　${valid ? `達成率 ${rate}%` : ''}</div>
+    <div class="report-progress-track" role="progressbar" aria-label="${label}の達成率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${width}" aria-valuetext="${valid ? `${rate}%` : '目標未設定'}"><div class="report-progress-fill" style="width:${width}%"></div></div>
+  </div>`;
+}
 function pageReport() {
   const {rf = ''} = ui;
-  const list = [...S.reports].sort((a,b) => (b.report_date||'').localeCompare(a.report_date||''));
-  const filtered = rf ? list.filter(r => r.intern_id === rf) : list;
-
-  // 集計（今月）
-  const ym = todayStr().slice(0,7);
-  const thisMonth = list.filter(r => (r.report_date||'').startsWith(ym));
-  const totalMake = thisMonth.reduce((s,r) => s + (r.count_make||0), 0);
-  const totalPost = thisMonth.reduce((s,r) => s + (r.count_post||0), 0);
-  const totalCaption = thisMonth.reduce((s,r) => s + (r.count_caption||0), 0);
-  const totalThumb = thisMonth.reduce((s,r) => s + KIRI_CATS.reduce((n,c) => n + (r[reportColumn('thumb', c)] || 0), 0), 0);
-
+  const ym = ui.reportMonth || todayStr().slice(0, 7);
+  const monthRows = S.reports.filter(r => (r.report_date || '').startsWith(ym));
+  const filtered = (rf ? monthRows.filter(r => r.intern_id === rf) : monthRows)
+    .sort((a,b) => (b.report_date || '').localeCompare(a.report_date || ''));
+  // 進捗はスタッフの表示フィルターに依存せず、選択月の全員の実績を示す。
+  const totalMake = monthRows.reduce((s,r) => s + (r.count_make || 0), 0);
+  const totalPost = monthRows.reduce((s,r) => s + (r.count_post || 0), 0);
+  const totalCaption = monthRows.reduce((s,r) => s + (r.count_caption || 0), 0);
+  const totalThumb = monthRows.reduce((s,r) => s + KIRI_CATS.reduce((n,c) => n + (r[reportColumn('thumb', c)] || 0), 0), 0);
+  const goal = metric => S.report_goals.find(g => g.month === ym && g.metric === metric)?.target ?? null;
+  const [year, month] = ym.split('-');
+  const label = `${year}年${Number(month)}月`;
   const chipsF = `<div class="fchips" style="margin-bottom:16px">
     <button class="fchip ${!rf ? 'on' : ''}" data-act="repF" data-id="">全員</button>
     ${S.interns.map(it => `<button class="fchip ${rf === it.id ? 'on' : ''}" data-act="repF" data-id="${it.id}"><i class="dot" style="background:${esc(it.color)}"></i>${esc(it.name)}</button>`).join('')}
   </div>`;
-
   const rows = filtered.length ? filtered.map(r => {
     const it = internOf(r.intern_id);
     const d = r.report_date ? parseD(r.report_date) : null;
-    const tags = (r.work_types||'').split(',').filter(Boolean).map(t => `<span class="work-tag">${esc(t)}</span>`).join('');
-    return `<div class="rcard" data-act="viewReport" data-id="${r.id}">
-      <div class="rcard-left">
-        ${d ? `<div class="rdate"><b>${d.getDate()}</b>${d.getMonth()+1}月<br>${WD[d.getDay()]}</div>` : ''}
-      </div>
-      <div class="rbody">
-        <div class="rname"><i class="dot" style="background:${esc(it ? it.color : '#888')}"></i>${esc(it ? it.name : '（削除済み）')}</div>
-        <div class="rsummary">
-          ${r.count_make ? `<div class="rnum"><b>${r.count_make}</b><small>切り抜き本数</small></div>` : ''}
-          ${r.count_post ? `<div class="rnum"><b>${r.count_post}</b><small>投稿本数</small></div>` : ''}
-          ${r.count_caption ? `<div class="rnum"><b>${r.count_caption}</b><small>キャプション</small></div>` : ''}
-          ${(r.work_types||'').split(',').includes('サムネイル作成') ? `<div class="rnum"><b>${KIRI_CATS.reduce((n,c) => n + (r[reportColumn('thumb', c)] || 0), 0)}</b><small>サムネイル（枚）</small></div>` : ''}
-        </div>
-        ${tags ? `<div class="work-tags">${tags}</div>` : ''}
-        ${r.memo ? `<div class="rmemo">${esc(r.memo)}</div>` : ''}
+    return `<div class="rcard" role="button" tabindex="0" aria-label="${esc(r.report_date || '')} ${esc(it ? it.name : '（削除済み）')}の業務報告の詳細" data-act="viewReport" data-id="${r.id}">
+      <div class="rdate">${d ? `${d.getMonth()+1}月${d.getDate()}日（${WD[d.getDay()]}）` : '日付未設定'}</div>
+      <div class="rbody"><div class="rname"><i class="dot" style="background:${esc(it ? it.color : '#888')}"></i>${esc(it ? it.name : '（削除済み）')}さん</div>
+        <ul class="rm-work">${reportWorkLines(r)}</ul>
+        ${r.memo ? `<div class="rmemo">メモ：${esc(r.memo)}</div>` : ''}
       </div>
     </div>`;
-  }).join('') : empty('まだ業務報告がありません。');
-
+  }).join('') : empty('この月の業務報告はありません。');
   return `<div class="ph"><h1>業務報告</h1><div class="phr"><button class="btn pri" data-act="newReport">＋ 今日の報告を入力</button></div></div>
-    ${S.interns.length > 1 ? chipsF : ''}
-    <div class="rtotal">
-      <div class="rtotal-item"><b>${totalMake}</b><small>今月 切り抜き本数</small></div>
-      <div class="rtotal-sep"></div>
-      <div class="rtotal-item"><b>${totalPost}</b><small>今月 投稿本数</small></div>
-      <div class="rtotal-sep"></div>
-      <div class="rtotal-item"><b>${totalCaption}</b><small>今月 キャプション本数</small></div>
-      <div class="rtotal-sep"></div>
-      <div class="rtotal-item"><b>${totalThumb}</b><small>今月 サムネイル作成枚数</small></div>
-      <div class="rtotal-sep"></div>
-      <div class="rtotal-item"><b>${thisMonth.length}</b><small>今月 報告件数</small></div>
-    </div>
-    ${rows}`;
+    <section class="report-section" aria-label="月間目標と達成状況">
+      <div class="report-month"><button type="button" data-act="reportMonth" data-delta="-1" aria-label="前月">◀</button><strong>${label}</strong><button type="button" data-act="reportMonth" data-delta="1" aria-label="翌月">▶</button></div>
+      <h2>${label}の進捗（全員）</h2>
+      <div class="report-goals">${reportProgress('切り抜き作成', totalMake, goal('make'))}${reportProgress('投稿', totalPost, goal('post'))}</div>
+      <form class="report-goal-edit" data-submit="reportGoals" data-month="${ym}">
+        <div class="lab" style="margin-bottom:8px">${label}の目標設定（空欄は未設定）</div>
+        <div class="report-goal-fields"><label>切り抜き作成 目標本数<input type="number" inputmode="numeric" name="make" min="1" step="1" value="${esc(goal('make') ?? '')}" placeholder="目標本数"></label>
+        <label>投稿 目標本数<input type="number" inputmode="numeric" name="post" min="1" step="1" value="${esc(goal('post') ?? '')}" placeholder="目標本数"></label>
+        <button type="submit" class="btn pri">目標を保存</button></div>
+      </form>
+    </section>
+    <section class="report-section"><h2>${label}の実績（全員）</h2><dl class="report-summary">
+      <div><dt>キャプション作成</dt><dd>${totalCaption}本</dd></div><div><dt>サムネイル作成</dt><dd>${totalThumb}枚</dd></div><div><dt>報告件数</dt><dd>${monthRows.length}件</dd></div>
+    </dl></section>
+    <section aria-label="業務報告一覧"><h2>${label}の業務報告一覧</h2>${S.interns.length > 1 ? chipsF : ''}<div class="report-section" style="padding:0;overflow:hidden">${rows}</div></section>`;
 }
 
+ACT.reportMonth = d => {
+  const [y,m] = (ui.reportMonth || todayStr().slice(0,7)).split('-').map(Number);
+  const next = new Date(y, m - 1 + Number(d.delta), 1);
+  ui.reportMonth = `${next.getFullYear()}-${pad(next.getMonth()+1)}`;
+  renderPage();
+};
 ACT.repF = d => { ui.rf = d.id; renderPage(); };
+SUB.reportGoals = async (f, form) => {
+  const month = form.dataset.month;
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('対象月が正しくありません');
+  const rows = ['make', 'post'].map(metric => {
+    const raw = (f[metric] || '').trim();
+    const target = raw === '' ? null : Number(raw);
+    if (target !== null && (!Number.isSafeInteger(target) || target <= 0)) throw new Error('目標本数は1以上の整数で入力してください');
+    return {month, metric, target};
+  });
+  await q(db.from('report_goals').upsert(rows, {onConflict:'month,metric'}));
+  await reload(['report_goals']);
+  toast('月間目標を保存しました');
+};
 
 function reportCountFields(r, prefix, unit) {
   return KIRI_CATS.map(c => `<label class="work-count-row"><span>${esc(c)}</span>
