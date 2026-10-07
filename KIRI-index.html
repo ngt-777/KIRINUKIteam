@@ -203,6 +203,20 @@ h1,h2,h3{margin:0}
 .rtotal-sep{width:1px;background:#E6E4F2;align-self:stretch}
 .work-tags{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 .work-tag{display:inline-flex;align-items:center;gap:5px;background:var(--field);border-radius:999px;padding:4px 12px;font-size:13.5px;font-weight:700}
+.work-list{grid-column:1/-1;display:flex;flex-direction:column;gap:10px}
+.work-card{border:1px solid #DCD9E9;border-radius:12px;overflow:hidden;background:#fff}
+.work-card.open{border-color:var(--accent)}
+.work-head{display:flex;align-items:center;gap:12px;padding:13px 15px;cursor:pointer;font-weight:700;min-height:52px}
+.work-head:hover{background:#F8F7FC}
+.work-head input{width:20px;height:20px;min-width:20px;accent-color:var(--accent);padding:0;margin:0}
+.work-arrow{margin-left:auto;color:var(--sub);transition:transform .15s}
+.work-card.open .work-arrow{transform:rotate(90deg)}
+.work-panel{display:none;border-top:1px solid #E6E4F2;padding:15px;background:#FAF9FD}
+.work-card.open .work-panel{display:block}
+.work-count-row{display:grid;grid-template-columns:minmax(80px,1fr) minmax(90px,130px) 28px;align-items:center;gap:10px;margin:0 0 10px;font-weight:700}
+.work-count-row:last-child{margin-bottom:0}
+.work-count-row input{text-align:right}
+@media(max-width:480px){.work-head{padding:12px}.work-panel{padding:12px}.work-count-row{grid-template-columns:minmax(68px,1fr) minmax(70px,110px) 22px;gap:6px}}
 #toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);background:var(--ink);color:#fff;padding:12px 22px;border-radius:999px;font-weight:700;opacity:0;pointer-events:none;transition:.2s;z-index:300;max-width:90vw}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 #toast.err{background:var(--danger)}
@@ -1238,12 +1252,11 @@ SUB.setup = async f => {
 /* ============================================================
    ⑥ 業務報告
 ============================================================ */
-const WORK_TYPES = ['切り抜き作業','投稿作業','入力作業（アプリ登録）','インサイト集計','情報修正','キャプション作成','その他'];
+const WORK_TYPES = ['切り抜き作業','投稿作業','入力作業（アプリ登録）','インサイト集計','キャプション作成','サムネイル作成','その他'];
 const KIRI_CATS = ['渋スト','ASMR','希空ch'];
 // PostgreSQL は引用符なしで作成したカラム名の英大文字を小文字化する。
 // フォームの表示名 ASMR はそのままにし、DB の実カラム *_asmr を参照する。
 const reportColumn = (prefix, category) => `${prefix}_${category === 'ASMR' ? 'asmr' : category}`;
-const WORK_EXPAND = {'切り抜き作業':'kiriSection','投稿作業':'postSection','キャプション作成':'captionSection','その他':'otherSection'};
 
 function pageReport() {
   const {rf = ''} = ui;
@@ -1256,6 +1269,7 @@ function pageReport() {
   const totalMake = thisMonth.reduce((s,r) => s + (r.count_make||0), 0);
   const totalPost = thisMonth.reduce((s,r) => s + (r.count_post||0), 0);
   const totalCaption = thisMonth.reduce((s,r) => s + (r.count_caption||0), 0);
+  const totalThumb = thisMonth.reduce((s,r) => s + KIRI_CATS.reduce((n,c) => n + (r[reportColumn('thumb', c)] || 0), 0), 0);
 
   const chipsF = `<div class="fchips" style="margin-bottom:16px">
     <button class="fchip ${!rf ? 'on' : ''}" data-act="repF" data-id="">全員</button>
@@ -1276,6 +1290,7 @@ function pageReport() {
           ${r.count_make ? `<div class="rnum"><b>${r.count_make}</b><small>切り抜き本数</small></div>` : ''}
           ${r.count_post ? `<div class="rnum"><b>${r.count_post}</b><small>投稿本数</small></div>` : ''}
           ${r.count_caption ? `<div class="rnum"><b>${r.count_caption}</b><small>キャプション</small></div>` : ''}
+          ${(r.work_types||'').split(',').includes('サムネイル作成') ? `<div class="rnum"><b>${KIRI_CATS.reduce((n,c) => n + (r[reportColumn('thumb', c)] || 0), 0)}</b><small>サムネイル（枚）</small></div>` : ''}
         </div>
         ${tags ? `<div class="work-tags">${tags}</div>` : ''}
         ${r.memo ? `<div class="rmemo">${esc(r.memo)}</div>` : ''}
@@ -1292,6 +1307,8 @@ function pageReport() {
       <div class="rtotal-sep"></div>
       <div class="rtotal-item"><b>${totalCaption}</b><small>今月 キャプション本数</small></div>
       <div class="rtotal-sep"></div>
+      <div class="rtotal-item"><b>${totalThumb}</b><small>今月 サムネイル作成枚数</small></div>
+      <div class="rtotal-sep"></div>
       <div class="rtotal-item"><b>${thisMonth.length}</b><small>今月 報告件数</small></div>
     </div>
     ${rows}`;
@@ -1299,16 +1316,26 @@ function pageReport() {
 
 ACT.repF = d => { ui.rf = d.id; renderPage(); };
 
+function reportCountFields(r, prefix, unit) {
+  return KIRI_CATS.map(c => `<label class="work-count-row"><span>${esc(c)}</span>
+    <input type="number" inputmode="numeric" name="${prefix}_${c}" value="${esc(r[reportColumn(prefix, c)] ?? '')}" placeholder="0" min="0"><span>${unit}</span></label>`).join('');
+}
+function reportWorkPanel(type, r) {
+  if (type === '切り抜き作業') return `<div class="lab" style="margin-bottom:10px">切り抜き本数（カテゴリ別）</div>${reportCountFields(r, 'kiri', '本')}`;
+  if (type === '投稿作業') return `<div class="lab" style="margin-bottom:10px">投稿本数（カテゴリ別）</div>${reportCountFields(r, 'post', '本')}`;
+  if (type === 'キャプション作成') return `<div class="lab" style="margin-bottom:3px">キャプション作成本数（カテゴリ別）</div><div class="sub" style="margin-bottom:10px">切り抜き本数から自動入力・手修正可</div>${reportCountFields(r, 'caption', '本')}`;
+  if (type === 'サムネイル作成') return `<div class="lab" style="margin-bottom:10px">サムネイル作成数（カテゴリ別）</div>${reportCountFields(r, 'thumb', '枚')}`;
+  if (type === 'その他') return `<label class="lab" for="otherDetail">その他の作業内容（自由入力）</label><textarea id="otherDetail" name="other_detail" placeholder="具体的にどんな作業をしたか入力してください">${esc(r.other_detail ?? '')}</textarea>`;
+  return '<p class="sub" style="margin:0">この作業の詳細入力欄はありません。実施した場合はこの項目を選択してください。</p>';
+}
 function reportForm(id) {
   const r = id ? S.reports.find(x => x.id === id) : {report_date: todayStr(), intern_id: S.interns.length === 1 ? S.interns[0].id : ''};
   if (!r) return '';
   const x = k => esc(r[k] ?? '');
   const selTypes = (r.work_types||'').split(',').filter(Boolean);
-  const hasKiri = selTypes.includes('切り抜き作業');
-  const hasOther = selTypes.includes('その他');
-  // カテゴリ別本数（kiri_渋スト, kiri_ASMR, kiri_希空ch）
-  const kiriVals = k => r[reportColumn('kiri', k)] ?? '';
+  const legacyTypes = selTypes.filter(t => !WORK_TYPES.includes(t));
   return `<form data-submit="report" data-id="${id||''}">
+    <input type="hidden" name="legacy_work_types" value="${esc(legacyTypes.join(','))}">
     <div class="mh"><h2>${id ? '業務報告を編集' : '今日の業務報告'}</h2><button type="button" class="x" data-act="close" aria-label="閉じる">✕</button></div>
     <div class="fgrid">
       <div class="f full"><label>名前 <span style="color:var(--accent)">*</span></label>
@@ -1321,53 +1348,11 @@ function reportForm(id) {
         <input type="date" name="report_date" value="${x('report_date')}" required>
       </div>
       <div class="fsec">今日やったこと</div>
-      <div class="f full"><label>作業内容（複数選択可）</label>
-        <div class="segs" id="workTypeSegs">
-          ${WORK_TYPES.map(t => `<label class="seg"><input type="checkbox" name="work_types" value="${t}" data-act="workTypeChk" ${selTypes.includes(t) ? 'checked' : ''}><span>${t}</span></label>`).join('')}
-        </div>
-      </div>
-
-      <!-- 切り抜き作業 → カテゴリ別本数 -->
-      <div class="f full" id="kiriSection" style="display:${hasKiri ? 'block' : 'none'}">
-        <div style="background:var(--field);border-radius:12px;padding:16px 18px">
-          <div class="lab" style="margin-bottom:12px">📹 切り抜き本数（カテゴリ別）</div>
-          <div class="fgrid">
-            ${KIRI_CATS.map(c => `<div class="f"><label>${c}</label>
-              <input type="number" inputmode="numeric" name="kiri_${c}" value="${esc(kiriVals(c))}" placeholder="0" min="0">
-            </div>`).join('')}
-          </div>
-        </div>
-      </div>
-
-      <!-- 投稿作業 → カテゴリ別本数 -->
-      <div class="f full" id="postSection" style="display:${selTypes.includes('投稿作業') ? 'block' : 'none'}">
-        <div style="background:var(--field);border-radius:12px;padding:16px 18px">
-          <div class="lab" style="margin-bottom:12px">📤 投稿本数（カテゴリ別）</div>
-          <div class="fgrid">
-            ${KIRI_CATS.map(c => `<div class="f"><label>${c}</label>
-              <input type="number" inputmode="numeric" name="post_${c}" value="${esc(r[reportColumn('post', c)] ?? '')}" placeholder="0" min="0">
-            </div>`).join('')}
-          </div>
-        </div>
-      </div>
-
-      <!-- キャプション作成 → カテゴリ別本数 -->
-      <div class="f full" id="captionSection" style="display:${selTypes.includes('キャプション作成') ? 'block' : 'none'}">
-        <div style="background:var(--field);border-radius:12px;padding:16px 18px">
-          <div class="lab" style="margin-bottom:4px">✏️ キャプション作成本数（カテゴリ別）</div>
-          <div class="sub" style="margin-bottom:10px;font-size:13px">切り抜き本数から自動入力・手修正可</div>
-          <div class="fgrid">
-            ${KIRI_CATS.map(c => `<div class="f"><label>${c}</label>
-              <input type="number" inputmode="numeric" name="caption_${c}" value="${esc(r[reportColumn('caption', c)] ?? '')}" placeholder="0" min="0">
-            </div>`).join('')}
-          </div>
-        </div>
-      </div>
-
-      <!-- その他 → 自由入力 -->
-      <div class="f full" id="otherSection" style="display:${hasOther ? 'block' : 'none'}">
-        <label>その他の作業内容（自由入力）</label>
-        <textarea name="other_detail" placeholder="具体的にどんな作業をしたか入力してください">${x('other_detail')}</textarea>
+      <div class="work-list" role="group" aria-label="作業内容（複数選択可）">
+        ${WORK_TYPES.map(t => `<div class="work-card${selTypes.includes(t) ? ' open' : ''}">
+          <label class="work-head"><input type="checkbox" name="work_types" value="${t}" data-act="workTypeChk" ${selTypes.includes(t) ? 'checked' : ''}><span>${t}</span><span class="work-arrow" aria-hidden="true">▶</span></label>
+          <div class="work-panel">${reportWorkPanel(t, r)}</div>
+        </div>`).join('')}
       </div>
 
       <div class="f full"><label>ひとことメモ（任意）</label>
@@ -1410,6 +1395,12 @@ function reportDetailHtml(id) {
           <div class="rnum" style="background:#E6E4F2"><b>${r.count_caption ?? 0}</b><small>合計</small></div>
         </div>
       </div>
+      ${(r.work_types||'').split(',').includes('サムネイル作成') ? `<div class="f full"><div class="lab">🖼️ サムネイル作成枚数（カテゴリ別）</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">
+          ${KIRI_CATS.map(c => `<div class="rnum"><b>${r[reportColumn('thumb', c)] ?? 0}</b><small>${esc(c)}（枚）</small></div>`).join('')}
+          <div class="rnum" style="background:#E6E4F2"><b>${KIRI_CATS.reduce((n,c) => n + (r[reportColumn('thumb', c)] || 0), 0)}</b><small>合計（枚）</small></div>
+        </div>
+      </div>` : ''}
       ${r.other_detail ? `<div class="f full"><div class="lab">その他の作業内容</div><div class="dval">${esc(r.other_detail)}</div></div>` : ''}
       <div class="f full"><div class="lab">ひとことメモ</div><div class="dval">${r.memo ? esc(r.memo) : '（なし）'}</div></div>
     </div>
@@ -1420,12 +1411,8 @@ function reportDetailHtml(id) {
 }
 
 ACT.workTypeChk = (d, el) => {
-  const form = el.closest('form');
-  const checked = [...form.querySelectorAll('input[name=work_types]:checked')].map(e => e.value);
-  Object.entries(WORK_EXPAND).forEach(([type, secId]) => {
-    const sec = form.querySelector('#' + secId);
-    if (sec) sec.style.display = checked.includes(type) ? 'block' : 'none';
-  });
+  const card = el.closest('.work-card');
+  if (card) card.classList.toggle('open', el.checked);
 };
 // 切り抜き本数入力 → キャプション欄へ自動コピー（未入力のときだけ）
 document.addEventListener('input', e => {
@@ -1461,13 +1448,15 @@ ACT.viewReport = d => openModal(() => reportDetailHtml(d.id));
 SUB.report = async (f, form) => {
   const id = form.dataset.id;
   if (!f.intern_id || !f.report_date) return toast('名前と日付は必須です', true);
-  const types = [...form.querySelectorAll('input[name=work_types]:checked')].map(el => el.value).join(',');
+  const types = [...form.querySelectorAll('input[name=work_types]:checked')].map(el => el.value)
+    .concat((f.legacy_work_types || '').split(',').filter(Boolean)).join(',');
   // カテゴリ別本数
-  const kiriData = {}, postData = {}, captionData = {};
+  const kiriData = {}, postData = {}, captionData = {}, thumbData = {};
   KIRI_CATS.forEach(c => {
     kiriData[reportColumn('kiri', c)] = numOrNull(f['kiri_' + c]);
     postData[reportColumn('post', c)] = numOrNull(f['post_' + c]);
     captionData[reportColumn('caption', c)] = numOrNull(f['caption_' + c]);
+    thumbData[reportColumn('thumb', c)] = types.split(',').includes('サムネイル作成') ? numOrNull(f['thumb_' + c]) : null;
   });
   // 各合計
   const count_make    = KIRI_CATS.reduce((s,c) => s + (kiriData[reportColumn('kiri', c)]    || 0), 0) || null;
@@ -1482,7 +1471,7 @@ SUB.report = async (f, form) => {
     count_caption,
     other_detail: nn(f.other_detail),
     memo: nn(f.memo),
-    ...kiriData, ...postData, ...captionData
+    ...kiriData, ...postData, ...captionData, ...thumbData
   };
   if (id) await q(db.from('reports').update(rec).eq('id', id));
   else await q(db.from('reports').insert(rec));
