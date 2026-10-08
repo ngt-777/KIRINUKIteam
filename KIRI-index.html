@@ -72,6 +72,20 @@ h1,h2,h3{margin:0}
 .aprof{margin-top:4px;font-size:15px}
 .miss{display:inline-block;align-self:flex-start;margin-top:auto;background:#FFE9C2;color:#7A3F00;font-weight:700;border-radius:999px;padding:3px 12px;font-size:14px}
 .okmark{margin-top:auto;font-weight:700;color:var(--ok);font-size:14px}
+.acard{cursor:pointer;min-height:245px}
+.acard:focus-visible,.af-edit:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.acard .miss{margin-top:7px}
+.af-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;border-top:1px solid #E6E4F2;margin-top:auto;padding-top:13px;width:100%}
+.af-stat{min-width:0}
+.af-label{display:block;color:var(--sub);font-size:12px;font-weight:700;white-space:nowrap}
+.af-value{display:block;font-size:17px;font-weight:850;line-height:1.5;white-space:nowrap}
+.af-edit{border:0;background:transparent;padding:0;color:inherit;cursor:pointer;text-align:left;font:inherit;font-weight:850;white-space:nowrap}
+.af-edit:hover{text-decoration:underline}
+.af-inline{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:3px}
+.af-inline input{width:75px;min-width:0;padding:4px;border:1px solid #C8C5D6;border-radius:6px;font-size:14px}
+.af-inline button{border:1px solid #DCD9E9;background:#fff;border-radius:6px;cursor:pointer;padding:4px;font-size:12px}
+@media(min-width:1050px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:390px){.af-value{font-size:15px}.af-label{font-size:11px}}
 
 /* video list */
 .tbl{display:flex;flex-direction:column;gap:10px}
@@ -608,19 +622,55 @@ const ACC_FIELDS = ['name','platform','handle','email','password','registered_da
 const missCount = a => ACC_FIELDS.filter(k => !a[k] || !String(a[k]).trim()).length;
 
 function pageAccounts() {
+  const insightByVideo = insMapOf();
+  const postedByAccount = new Map();
+  const likesByAccount = new Map();
+  const hasLikes = new Set();
+  S.videos.filter(v => v.status === '投稿済' && v.account_id).forEach(v => {
+    postedByAccount.set(v.account_id, (postedByAccount.get(v.account_id) || 0) + 1);
+    const likes = insightByVideo.get(v.id)?.likes;
+    if (likes !== null && likes !== undefined && Number.isFinite(Number(likes))) {
+      likesByAccount.set(v.account_id, (likesByAccount.get(v.account_id) || 0) + Number(likes));
+      hasLikes.add(v.account_id);
+    }
+  });
   const cards = S.accounts.map((a, i) => {
     const n = missCount(a);
-    return `<button class="acard" style="--c:${esc(a.color || '#888')}" data-act="viewAccount" data-id="${a.id}">
+    const followers = a.followers === null || a.followers === undefined ? '—' : Number(a.followers).toLocaleString();
+    const totalLikes = hasLikes.has(a.id) ? likesByAccount.get(a.id).toLocaleString() : '—';
+    return `<div class="acard" style="--c:${esc(a.color || '#888')}" role="button" tabindex="0" aria-label="No.${a.sort_order || i+1} ${esc(a.name)}の詳細" data-act="viewAccount" data-id="${esc(a.id)}">
       <div class="aplat">No.${a.sort_order || i + 1}　${esc(a.platform)}</div>
       <div class="aname">${esc(a.name) || '（名称未設定）'}</div>
       <div class="ahandle">${esc(a.handle)}</div>
       <div class="aprof">${esc(a.profile_text)}</div>
       ${n ? `<span class="miss">⚠ 未入力項目あり（${n}件）</span>` : ''}
-    </button>`;
+      <div class="af-stats">
+        <div class="af-stat"><span class="af-label">投稿本数</span><strong class="af-value">${(postedByAccount.get(a.id) || 0).toLocaleString()}本</strong></div>
+        <div class="af-stat"><span class="af-label">フォロワー</span><button type="button" class="af-edit af-value" data-act="editFollowers" data-id="${esc(a.id)}" aria-label="${esc(a.name)}のフォロワー数を編集">${followers} ✎</button></div>
+        <div class="af-stat"><span class="af-label">総いいね</span><strong class="af-value">${totalLikes}</strong></div>
+      </div>
+    </div>`;
   }).join('');
   return `<div class="ph"><h1>アカウント管理</h1></div>
     ${S.accounts.length ? `<div class="grid">${cards}</div>` : empty('アカウントがありません。')}`;
 }
+ACT.editFollowers = (d, el) => {
+  const a = S.accounts.find(x => x.id === d.id); if (!a) return;
+  const host = el.closest('.af-stat');
+  host.innerHTML = `<span class="af-label">フォロワー</span><form class="af-inline" data-act="ignoreCardClick" data-submit="accountFollowers" data-id="${esc(a.id)}">
+    <input type="number" inputmode="numeric" min="0" step="1" name="followers" value="${esc(a.followers ?? '')}" aria-label="フォロワー数" placeholder="未入力" required>
+    <button type="submit">保存</button><button type="button" data-act="cancelFollowers">取消</button></form>`;
+  host.querySelector('input').focus();
+};
+ACT.ignoreCardClick = () => {};
+ACT.cancelFollowers = () => renderPage();
+SUB.accountFollowers = async (f, form) => {
+  const value = Number(f.followers);
+  if (f.followers === '' || !Number.isSafeInteger(value) || value < 0 || value > 2147483647) throw new Error('フォロワー数は0以上の整数で入力してください');
+  await q(db.from('accounts').update({followers:value}).eq('id', form.dataset.id));
+  await reload(['accounts']);
+  toast('フォロワー数を保存しました');
+};
 function accountDetailHtml(id) {
   const a = S.accounts.find(x => x.id === id); if (!a) return '';
   const v = k => esc(a[k] ?? '');
